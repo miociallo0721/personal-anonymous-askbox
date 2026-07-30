@@ -1,5 +1,7 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+import { SHARE_CARD_ASPECTS, SHARE_CARD_THEME_NAMES } from "@/lib/share-card";
+
 export const questionStatuses = ["unread", "read", "replied", "ignored", "spam"] as const;
 export type QuestionStatus = (typeof questionStatuses)[number];
 
@@ -25,6 +27,47 @@ export const questions = sqliteTable(
     index("questions_status_idx").on(table.status),
     index("questions_ip_hash_idx").on(table.ipHash),
     index("questions_telegram_notified_idx").on(table.telegramNotified),
+  ],
+);
+
+export const answers = sqliteTable(
+  "answers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    questionId: integer("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("answers_question_id_unique").on(table.questionId),
+    index("answers_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+export const cardImageFormats = ["png"] as const;
+
+export const cards = sqliteTable(
+  "cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    answerId: integer("answer_id")
+      .notNull()
+      .references(() => answers.id, { onDelete: "cascade" }),
+    aspect: text("aspect", { enum: SHARE_CARD_ASPECTS }).notNull(),
+    theme: text("theme", { enum: SHARE_CARD_THEME_NAMES }).notNull(),
+    imageFormat: text("image_format", { enum: cardImageFormats }).notNull().default("png"),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    pageCount: integer("page_count").notNull().default(1),
+    rendererVersion: integer("renderer_version").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("cards_answer_id_idx").on(table.answerId),
+    index("cards_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -61,8 +104,13 @@ export const adminLoginAttempts = sqliteTable(
     succeeded: integer("succeeded", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (table) => [index("admin_login_attempts_ip_created_idx").on(table.ipHash, table.createdAt)],
+  (table) => [
+    index("admin_login_attempts_ip_created_idx").on(table.ipHash, table.createdAt),
+    index("admin_login_attempts_created_at_idx").on(table.createdAt),
+  ],
 );
 
 export type Question = typeof questions.$inferSelect;
 export type NewQuestion = typeof questions.$inferInsert;
+export type Answer = typeof answers.$inferSelect;
+export type Card = typeof cards.$inferSelect;

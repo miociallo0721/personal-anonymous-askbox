@@ -1,12 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import { getShareCardTypography, SHARE_CARD_FORMATS, SHARE_CARD_THEMES } from "@/lib/share-card";
+import {
+  createShareCardRenderPlan,
+  getShareCardTypography,
+  SHARE_CARD_FORMATS,
+  SHARE_CARD_THEMES,
+} from "@/lib/share-card";
 
-describe("share card", () => {
+describe("分享卡片渲染计划", () => {
   it("provides high-resolution dimensions for every aspect", () => {
     expect(SHARE_CARD_FORMATS["1:1"]).toMatchObject({ width: 1200, height: 1200 });
     expect(SHARE_CARD_FORMATS["4:5"]).toMatchObject({ width: 1200, height: 1500 });
     expect(SHARE_CARD_FORMATS["9:16"]).toMatchObject({ width: 1080, height: 1920 });
+  });
+
+  it("creates versioned image metadata independently from the route", () => {
+    expect(createShareCardRenderPlan("4:5", "paper")).toEqual({
+      imageFormat: "png",
+      width: 1200,
+      height: 1500,
+      pageCount: 1,
+      rendererVersion: 1,
+      aspect: "4:5",
+      theme: "paper",
+    });
   });
 
   it("uses the warm paper design tokens", () => {

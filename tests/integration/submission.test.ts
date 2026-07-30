@@ -24,7 +24,7 @@ afterEach(() => {
   }
 });
 
-describe("问题提交", () => {
+describe("问题提交数据库集成", () => {
   it("Telegram 推送异常时问题仍会成功保存", async () => {
     const database = testDatabase();
     const result = await saveQuestion(

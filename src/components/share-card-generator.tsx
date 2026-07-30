@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { SHARE_CARD_ASPECTS, SHARE_CARD_FORMATS, type ShareCardAspect } from "@/lib/share-card";
 
@@ -10,6 +10,7 @@ type Props = {
     id: number;
     content: string;
   };
+  initialAnswer: string;
 };
 
 type Notice = { kind: "error" | "success"; text: string } | null;
@@ -25,18 +26,52 @@ function blobToDataUrl(blob: Blob) {
   });
 }
 
-export function ShareCardGenerator({ question }: Props) {
-  const [answer, setAnswer] = useState("");
+export function ShareCardGenerator({ question, initialAnswer }: Props) {
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+  const [answer, setAnswer] = useState(initialAnswer);
   const [aspect, setAspect] = useState<ShareCardAspect>("4:5");
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [notice, setNotice] = useState<Notice>(null);
   const answerLength = Array.from(answer).length;
   const format = SHARE_CARD_FORMATS[aspect];
+  const busy = saving || generating;
+
+  async function persistAnswer() {
+    const response = await fetch(`/api/admin/questions/${question.id}/answer`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: answer }),
+    });
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) throw new Error(data?.error ?? "回答保存失败，请稍后重试。");
+  }
+
+  async function save() {
+    if (busy || answerLength < 2 || answerLength > 600) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      await persistAnswer();
+      setNotice({ kind: "success", text: "回答已保存，问题已标记为已回复。" });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: error instanceof Error ? error.message : "回答保存失败，请稍后重试。",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (generating) return;
+    if (busy) return;
     if (answerLength < 2 || answerLength > 600) {
       setNotice({ kind: "error", text: "请输入 2 至 600 个字符的回答。" });
       return;
@@ -45,10 +80,11 @@ export function ShareCardGenerator({ question }: Props) {
     setGenerating(true);
     setNotice(null);
     try {
+      await persistAnswer();
       const response = await fetch(`/api/admin/questions/${question.id}/share-card`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answer, aspect, theme: "paper" }),
+        body: JSON.stringify({ aspect, theme: "paper" }),
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -70,6 +106,7 @@ export function ShareCardGenerator({ question }: Props) {
   return (
     <form
       onSubmit={generate}
+      data-hydrated={hydrated}
       className="grid gap-8 py-8 lg:grid-cols-[minmax(0,0.86fr)_minmax(22rem,1.14fr)] lg:gap-12"
     >
       <section>
@@ -90,12 +127,12 @@ export function ShareCardGenerator({ question }: Props) {
             onChange={(event) => setAnswer(event.target.value)}
             rows={8}
             maxLength={600}
-            disabled={generating}
+            disabled={busy}
             placeholder="写下要展示在分享卡片上的回答……"
             className="field mt-4 min-h-52 resize-y px-5 py-4 text-base leading-7"
           />
           <div className="mt-3 flex items-center justify-between gap-4">
-            <span className="type-caption">答案仅用于本次生成，不会写入数据库</span>
+            <span className="type-caption">回答会安全保存，可随时修改并重新生成</span>
             <span className="type-caption tabular-nums">{answerLength} / 600</span>
           </div>
         </div>
@@ -111,7 +148,7 @@ export function ShareCardGenerator({ question }: Props) {
                   value={item}
                   checked={aspect === item}
                   onChange={() => setAspect(item)}
-                  disabled={generating}
+                  disabled={busy}
                   className="peer sr-only"
                 />
                 <span className="flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-transparent text-sm text-[var(--muted)] transition-colors duration-200 peer-checked:border-[var(--accent)] peer-checked:bg-[var(--accent-soft)] peer-checked:text-[var(--foreground)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--accent)] peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
@@ -124,9 +161,18 @@ export function ShareCardGenerator({ question }: Props) {
 
         <div className="mt-8">
           <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy || answerLength < 2 || answerLength > 600}
+            className="button-secondary mr-2 w-full sm:w-auto sm:min-w-28"
+          >
+            {saving ? <span className="loading-mark" aria-hidden="true" /> : null}
+            {saving ? "正在保存…" : "保存回答"}
+          </button>
+          <button
             type="submit"
-            disabled={generating || answerLength < 2 || answerLength > 600}
-            className="button-primary w-full sm:w-auto sm:min-w-36"
+            disabled={busy || answerLength < 2 || answerLength > 600}
+            className="button-primary mt-2 w-full sm:mt-0 sm:w-auto sm:min-w-36"
           >
             {generating ? <span className="loading-mark" aria-hidden="true" /> : null}
             {generating ? "正在生成…" : "生成 PNG"}

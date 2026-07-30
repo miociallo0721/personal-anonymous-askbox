@@ -1,12 +1,11 @@
 import { and, count, eq, gte } from "drizzle-orm";
 
-import type { createDatabase } from "@/db/client";
+import type { DatabaseClient } from "@/db/types";
 import { blockedSources, questions, type Question } from "@/db/schema";
 import { RATE_LIMITS, evaluateRateLimits } from "@/lib/rate-limit";
 import { assessSpam } from "@/lib/spam";
 import { sendQuestionToTelegram } from "@/lib/telegram";
 
-type DatabaseClient = ReturnType<typeof createDatabase>["db"];
 type Notify = (question: Question, database: DatabaseClient) => Promise<unknown>;
 
 export type SubmissionInput = {

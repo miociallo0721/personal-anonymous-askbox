@@ -1,14 +1,16 @@
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
+import type { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 
 import { db } from "@/db/client";
 import { adminSessions } from "@/db/schema";
+import type { DatabaseClient } from "@/db/types";
 import { hmacHash, safeEqual, sha256 } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 
 export const SESSION_COOKIE = "askbox_admin_session";
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60_000;
+export const SESSION_DURATION_MS = 30 * 24 * 60 * 60_000;
 
 function sessionHash(token: string) {
   const env = getEnv();
@@ -19,33 +21,43 @@ export function verifyAdminPassword(candidate: string, configuredPassword: strin
   return safeEqual(candidate, configuredPassword);
 }
 
-export async function createAdminSession() {
-  const token = randomBytes(32).toString("base64url");
-  const now = new Date();
+export function createAdminSession(
+  database: DatabaseClient = db,
+  now = new Date(),
+  token = randomBytes(32).toString("base64url"),
+) {
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
-  db.delete(adminSessions).where(lt(adminSessions.expiresAt, now)).run();
-  db.insert(adminSessions)
+  database
+    .insert(adminSessions)
     .values({ tokenHash: sessionHash(token), createdAt: now, expiresAt })
     .run();
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
+  return { token, expiresAt };
+}
+
+export function setAdminSessionCookie(
+  response: NextResponse,
+  session: ReturnType<typeof createAdminSession>,
+) {
+  response.cookies.set(SESSION_COOKIE, session.token, {
     httpOnly: true,
     secure: getEnv().NODE_ENV === "production",
     sameSite: "strict",
     path: "/",
-    expires: expiresAt,
+    expires: session.expiresAt,
     priority: "high",
   });
 }
 
-export async function destroyAdminSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+export function destroyAdminSession(database: DatabaseClient, token?: string) {
   if (token)
-    db.delete(adminSessions)
+    database
+      .delete(adminSessions)
       .where(eq(adminSessions.tokenHash, sessionHash(token)))
       .run();
-  cookieStore.set(SESSION_COOKIE, "", {
+}
+
+export function clearAdminSessionCookie(response: NextResponse) {
+  response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
     secure: getEnv().NODE_ENV === "production",
     sameSite: "strict",
@@ -54,14 +66,25 @@ export async function destroyAdminSession() {
   });
 }
 
-export async function isAdminAuthenticated() {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+export function validateAdminSession(
+  database: DatabaseClient,
+  token: string | undefined,
+  now = new Date(),
+) {
   if (!token) return false;
-  const now = new Date();
-  const session = db
+  const session = database
     .select({ id: adminSessions.id })
     .from(adminSessions)
     .where(and(eq(adminSessions.tokenHash, sessionHash(token)), gt(adminSessions.expiresAt, now)))
     .get();
   return Boolean(session);
+}
+
+export function isAdminRequestAuthenticated(request: NextRequest) {
+  return validateAdminSession(db, request.cookies.get(SESSION_COOKIE)?.value);
+}
+
+export async function isAdminAuthenticated() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return validateAdminSession(db, token);
 }

@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/db/client";
 import { adminLoginAttempts } from "@/db/schema";
 import { apiError, apiSuccess, safeRouteError } from "@/lib/api";
-import { createAdminSession, verifyAdminPassword } from "@/lib/auth";
+import { createAdminSession, setAdminSessionCookie, verifyAdminPassword } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { hasValidMutationOrigin, requestFingerprints } from "@/lib/request-security";
 import { loginSchema } from "@/lib/validation";
@@ -33,8 +33,10 @@ export async function POST(request: NextRequest) {
     const valid = verifyAdminPassword(parsed.data.password, getEnv().ADMIN_PASSWORD);
     db.insert(adminLoginAttempts).values({ ipHash, succeeded: valid, createdAt: now }).run();
     if (!valid) return apiError("密码错误", 401);
-    await createAdminSession();
-    return apiSuccess();
+    const session = createAdminSession();
+    const response = apiSuccess();
+    setAdminSessionCookie(response, session);
+    return response;
   } catch (error) {
     return safeRouteError("admin-login", error);
   }

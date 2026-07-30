@@ -17,9 +17,12 @@ const envSchema = z.object({
   ADMIN_PUBLIC_URL: z.string().default(""),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().default(""),
   TURNSTILE_SECRET_KEY: z.string().default(""),
+  TURNSTILE_EXPECTED_HOSTNAME: z.string().default(""),
   TURNSTILE_ENABLED: booleanString(true),
   TRUST_CLOUDFLARE_PROXY: booleanString(false),
   TRUST_PROXY: booleanString(false),
+  EXTERNAL_SERVICES_MOCK: booleanString(false),
+  LOGIN_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   TZ: z.string().default("Asia/Shanghai"),
 });
 
@@ -43,6 +46,12 @@ export function validateRuntimeEnv() {
   if (env.NODE_ENV === "production" && env.ADMIN_PASSWORD.length < 12) {
     throw new Error("生产环境 ADMIN_PASSWORD 至少需要 12 个字符");
   }
+  if (env.NODE_ENV === "production" && env.EXTERNAL_SERVICES_MOCK) {
+    throw new Error("生产环境禁止启用外部服务 Mock");
+  }
+  if (env.TRUST_CLOUDFLARE_PROXY && env.TRUST_PROXY) {
+    throw new Error("TRUST_CLOUDFLARE_PROXY 与 TRUST_PROXY 不能同时启用");
+  }
   if (env.TURNSTILE_ENABLED) {
     if (!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || !env.TURNSTILE_SECRET_KEY) {
       throw new Error("Turnstile 已启用，但 Site Key 或 Secret Key 缺失");
@@ -58,6 +67,9 @@ export function validateRuntimeEnv() {
     throw new Error("Telegram 配置必须同时提供 Bot Token、Chat ID 和后台公开 URL");
   }
   if (env.ADMIN_PUBLIC_URL) z.url().parse(env.ADMIN_PUBLIC_URL);
+  if (env.NODE_ENV === "production" && !env.TRUST_CLOUDFLARE_PROXY && !env.TRUST_PROXY) {
+    console.warn("警告：生产环境未配置可信代理，所有访客将共享 unknown 来源指纹");
+  }
   return env;
 }
 

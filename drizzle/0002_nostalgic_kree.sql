@@ -1,0 +1,1 @@
+CREATE INDEX `admin_login_attempts_created_at_idx` ON `admin_login_attempts` (`created_at`);

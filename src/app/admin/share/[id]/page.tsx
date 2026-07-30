@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ShareCardGenerator } from "@/components/share-card-generator";
 import { db } from "@/db/client";
-import { questions } from "@/db/schema";
+import { answers, questions } from "@/db/schema";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 
@@ -23,11 +23,13 @@ export default async function ShareCardPage({ params }: Props) {
       id: questions.id,
       content: questions.content,
       status: questions.status,
+      answer: answers.content,
     })
     .from(questions)
+    .leftJoin(answers, eq(answers.questionId, questions.id))
     .where(eq(questions.id, id.data))
     .get();
-  if (!question || question.status !== "replied") notFound();
+  if (!question) notFound();
 
   return (
     <main className="mx-auto min-h-dvh max-w-6xl px-5 py-5 sm:px-8 sm:py-7 lg:px-10">
@@ -41,7 +43,10 @@ export default async function ShareCardPage({ params }: Props) {
         </a>
       </header>
 
-      <ShareCardGenerator question={{ id: question.id, content: question.content }} />
+      <ShareCardGenerator
+        question={{ id: question.id, content: question.content }}
+        initialAnswer={question.answer ?? ""}
+      />
     </main>
   );
 }

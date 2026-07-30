@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/db/client";
-import { questions, questionStatuses } from "@/db/schema";
+import { answers, questions, questionStatuses } from "@/db/schema";
 import { apiError, apiSuccess, authorizeAdmin, safeRouteError } from "@/lib/api";
 import { idSchema } from "@/lib/validation";
 
@@ -33,6 +33,14 @@ export async function PATCH(request: NextRequest, context: Context) {
       statusSchema.safeParse(await request.json()),
     ];
     if (!id.success || !body.success) return apiError("请求参数无效");
+    if (body.data.status === "replied") {
+      const answer = db
+        .select({ id: answers.id })
+        .from(answers)
+        .where(eq(answers.questionId, id.data))
+        .get();
+      if (!answer) return apiError("请先保存回答，再标记为已回复", 409);
+    }
     const now = new Date();
     const updated = db
       .update(questions)

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { RATE_LIMITS, evaluateRateLimits } from "@/lib/rate-limit";
 
-describe("数据库限流规则", () => {
+describe("限流规则", () => {
   it("允许未达到阈值的来源", () => {
     const counts = RATE_LIMITS.map((item) => ({ windowMs: item.windowMs, count: 0 }));
     expect(evaluateRateLimits(counts).allowed).toBe(true);

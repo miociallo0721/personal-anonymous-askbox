@@ -4,6 +4,10 @@ node_modules/
 .env.local
 data/
 coverage/
+dist/
+.tmp/
+playwright-report/
+output/playwright/
 *.log
 .DS_Store
 *.tsbuildinfo

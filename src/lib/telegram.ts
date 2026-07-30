@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Question } from "@/db/schema";
 import { questions } from "@/db/schema";
 import { getEnv } from "@/lib/env";
+import { errorMessage } from "@/lib/logger";
 import { formatShanghaiTime } from "@/lib/time";
 
 type DatabaseClient = typeof import("@/db/client").db;
@@ -14,14 +15,22 @@ const telegramResponse = z.object({
   description: z.string().optional(),
 });
 
-function errorSummary(error: unknown) {
-  const message = error instanceof Error ? error.message : "未知错误";
-  return message.replace(/[\r\n]+/g, " ").slice(0, 300);
-}
-
 export async function sendQuestionToTelegram(question: Question, database: DatabaseClient) {
   const env = getEnv();
   const now = new Date();
+  if (env.EXTERNAL_SERVICES_MOCK) {
+    const messageId = question.id;
+    await database
+      .update(questions)
+      .set({
+        telegramNotified: true,
+        telegramMessageId: messageId,
+        telegramError: null,
+        updatedAt: now,
+      })
+      .where(eq(questions.id, question.id));
+    return { success: true as const, messageId };
+  }
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.ADMIN_PUBLIC_URL) {
     const error = "Telegram 未完整配置";
     await database
@@ -73,7 +82,7 @@ export async function sendQuestionToTelegram(question: Question, database: Datab
       .where(eq(questions.id, question.id));
     return { success: true as const, messageId };
   } catch (error) {
-    const summary = errorSummary(error);
+    const summary = errorMessage(error);
     await database
       .update(questions)
       .set({ telegramNotified: false, telegramError: summary, updatedAt: now })

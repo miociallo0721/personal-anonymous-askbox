@@ -7,48 +7,51 @@
     "node": ">=20.9.0",
     "pnpm": ">=9.0.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild",
-      "sharp",
-      "unrs-resolver"
-    ]
-  },
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm typecheck && next build",
+    "build": "pnpm typecheck && pnpm build:maintenance && next build",
+    "build:maintenance": "esbuild src/maintenance/cli.ts --bundle --platform=node --format=esm --external:better-sqlite3 --outfile=dist/maintenance.mjs",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
+    "test:e2e": "tsx scripts/prepare-e2e.ts && playwright test",
+    "test:e2e:ui": "tsx scripts/prepare-e2e.ts && playwright test --ui",
+    "smoke:standalone": "node scripts/smoke-standalone.mjs",
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "maintenance": "tsx src/maintenance/cli.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.2",
-    "next": "16.2.10",
+    "next": "16.2.11",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vitest/coverage-v8": "4.1.10",
     "drizzle-kit": "^0.31.8",
+    "esbuild": "0.28.1",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   }
 }

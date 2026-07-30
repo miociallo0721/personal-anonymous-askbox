@@ -1,19 +1,21 @@
-import { eq } from "drizzle-orm";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ShareCard } from "@/components/share-card";
 import { db } from "@/db/client";
-import { questions } from "@/db/schema";
 import { apiError, authorizeAdmin, safeRouteError } from "@/lib/api";
-import { SHARE_CARD_ASPECTS, SHARE_CARD_FORMATS, SHARE_CARD_THEME_NAMES } from "@/lib/share-card";
+import {
+  createShareCardRenderPlan,
+  SHARE_CARD_ASPECTS,
+  SHARE_CARD_THEME_NAMES,
+} from "@/lib/share-card";
 import { idSchema } from "@/lib/validation";
+import { createCardExport, getCardSource } from "@/services/cards";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  answer: z.string().trim().min(2).max(600),
   aspect: z.enum(SHARE_CARD_ASPECTS),
   theme: z.enum(SHARE_CARD_THEME_NAMES).default("paper"),
 });
@@ -31,33 +33,20 @@ export async function POST(request: NextRequest, context: Context) {
     ];
     if (!id.success || !body.success) return apiError("分享卡片参数无效");
 
-    const question = db
-      .select({
-        id: questions.id,
-        content: questions.content,
-        status: questions.status,
-      })
-      .from(questions)
-      .where(eq(questions.id, id.data))
-      .get();
-    if (!question) return apiError("问题不存在", 404);
-    if (question.status !== "replied") return apiError("仅已回复的问题可以生成分享卡片", 409);
+    const source = getCardSource(db, id.data);
+    if (!source) return apiError("请先保存回答，再生成分享卡片", 409);
 
-    const format = SHARE_CARD_FORMATS[body.data.aspect];
-    const filename = `askbox-${question.id}-${body.data.aspect.replace(":", "x")}.png`;
-
-    return new ImageResponse(
+    const plan = createShareCardRenderPlan(body.data.aspect, body.data.theme);
+    const filename = `askbox-${id.data}-${body.data.aspect.replace(":", "x")}.png`;
+    const response = new ImageResponse(
       ShareCard({
-        data: {
-          question: question.content.trim(),
-          answer: body.data.answer,
-        },
+        data: source.data,
         aspect: body.data.aspect,
         themeName: body.data.theme,
       }),
       {
-        width: format.width,
-        height: format.height,
+        width: plan.width,
+        height: plan.height,
         headers: {
           "Cache-Control": "private, no-store, max-age=0",
           "Content-Disposition": `attachment; filename="${filename}"`,
@@ -65,6 +54,13 @@ export async function POST(request: NextRequest, context: Context) {
         },
       },
     );
+    const { card } = createCardExport(db, {
+      answerId: source.answerId,
+      aspect: body.data.aspect,
+      theme: body.data.theme,
+    });
+    response.headers.set("X-Askbox-Card-Id", String(card.id));
+    return response;
   } catch (error) {
     return safeRouteError("admin-share-card", error);
   }

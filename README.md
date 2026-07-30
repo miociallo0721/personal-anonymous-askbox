@@ -12,7 +12,7 @@
 - 每分钟 1 条、每小时 5 条、每天 15 条的来源限流
 - 单管理员服务端 Session：HttpOnly、Secure（生产环境）、SameSite=Strict
 - 后台搜索、状态筛选、分页、标记未读/已读/已回复/忽略/垃圾信息
-- 已回复问题可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
+- 回答独立持久化；可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
 - 单条删除、批量删除垃圾信息、封禁/解除来源
 - Telegram 发送结果、`message_id` 和最近错误记录，支持后台手动重发
 - SQLite WAL、Drizzle schema/migration、必要索引和启动自动迁移
@@ -24,7 +24,7 @@
 - TypeScript 严格模式
 - SQLite、better-sqlite3、Drizzle ORM
 - Tailwind CSS 4
-- Zod 4、Vitest、ESLint、Prettier
+- Zod 4、Vitest、Playwright、ESLint、Prettier
 - Next.js ImageResponse 服务端 PNG 渲染
 - Cloudflare Turnstile、Telegram Bot API
 - pnpm、Docker Compose
@@ -44,8 +44,13 @@ Next.js 16 要求 Node.js 20.9 或更高版本。推荐本地与 VPS 使用 Node
 │   ├── components/                # 前台表单、Turnstile、后台交互组件
 │   ├── db/                        # Drizzle schema、连接和 migration 执行器
 │   ├── lib/                       # 认证、环境、哈希、限流、审核、Telegram
-│   └── services/                  # 问题提交流程
-├── tests/                         # 基础单元与集成测试
+│   ├── maintenance/               # 可由 cron 调用的数据生命周期维护入口
+│   └── services/                  # 提交、回答、卡片与维护服务层
+├── tests/
+│   ├── unit/                      # 纯函数与安全边界单元测试
+│   ├── integration/               # SQLite、Session、服务层集成测试
+│   ├── api/                       # Route Handler API 测试
+│   └── e2e/                       # Playwright 完整浏览器流程
 ├── Dockerfile
 ├── docker-compose.yml
 ├── drizzle.config.ts
@@ -56,7 +61,7 @@ Next.js 16 要求 Node.js 20.9 或更高版本。推荐本地与 VPS 使用 Node
 
 ```bash
 cp .env.example .env
-pnpm install
+pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm db:migrate
 pnpm dev
@@ -72,20 +77,24 @@ DATABASE_URL=file:./data/askbox.db
 
 ## 分享卡片
 
-1. 在管理后台将问题标记为“已回复”。
-2. 点击该问题操作区中的“分享卡片”。
-3. 输入要展示的回答，选择 1:1、4:5 或 9:16。
+1. 点击问题操作区中的“回复 / 分享卡片”。
+2. 输入回答并保存；问题会原子地标记为“已回复”。
+3. 选择 1:1、4:5 或 9:16。
 4. 生成并下载 PNG。
 
-卡片由服务端直接排版和渲染，不依赖浏览器截图。三种尺寸分别为 1200×1200、1200×1500 和 1080×1920。回答仅用于当前生成请求，不会写入 SQLite；生成接口仍要求有效的管理员 Session 和同源请求。
+卡片由服务端直接排版和渲染，不依赖浏览器截图。三种尺寸分别为 1200×1200、1200×1500 和 1080×1920。回答保存在独立 `answers` 表，图片只能基于数据库中的回答生成；每次导出会在 `cards` 表记录比例、主题、尺寸、格式、页数和 renderer 版本，不保存最终图片。生成接口仍要求有效的管理员 Session 和同源请求。
 
 常用质量命令：
 
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:unit
+pnpm test:integration
+pnpm test:coverage
+pnpm test:e2e
 pnpm build
+pnpm smoke:standalone
 pnpm format:check
 ```
 
@@ -102,9 +111,12 @@ pnpm format:check
 | `ADMIN_PUBLIC_URL`               | 生产必需   | 外部可访问的后台 URL，例如 `https://ask.example.com/admin`                    |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | 启用时必需 | Turnstile Site Key；会进入浏览器代码，不是秘密                                |
 | `TURNSTILE_SECRET_KEY`           | 启用时必需 | Turnstile Secret Key，仅服务端读取                                            |
+| `TURNSTILE_EXPECTED_HOSTNAME`    | 建议       | Siteverify 响应必须匹配的生产域名，例如 `ask.akiyamamio.one`                  |
 | `TURNSTILE_ENABLED`              | 是         | 默认 `true`；开发环境可明确设为 `false`                                       |
 | `TRUST_CLOUDFLARE_PROXY`         | 否         | 只在源站仅接受 Cloudflare/可信代理请求时设为 `true`                           |
 | `TRUST_PROXY`                    | 否         | 只在可信 Nginx/1Panel 会覆盖转发头时设为 `true`                               |
+| `EXTERNAL_SERVICES_MOCK`         | 否         | 仅自动化测试使用；生产环境设为 `true` 会拒绝启动                              |
+| `LOGIN_ATTEMPT_RETENTION_DAYS`   | 否         | 登录尝试记录保留天数，默认 30                                                 |
 | `TZ`                             | 建议       | 使用 `Asia/Shanghai`；数据库保存 UTC 时间点，界面和 Telegram 按上海时区格式化 |
 
 生成密钥示例：
@@ -149,7 +161,7 @@ docker compose ps
 docker compose logs --tail=100 askbox
 ```
 
-服务默认仅绑定 `127.0.0.1:3001`，应通过 Nginx、1Panel 或 Cloudflare 前置访问。可通过 `ASKBOX_HOST_PORT` 修改宿主机端口。容器以 UID 1001 非 root 用户运行，根文件系统只读，`./data` 挂载到 `/data`。更新镜像不会删除数据库：
+服务默认仅绑定 `127.0.0.1:3001`，应通过 Nginx、1Panel 或 Cloudflare 前置访问。可通过 `ASKBOX_HOST_PORT` 修改宿主机端口。容器以 UID 1001 非 root 用户运行，根文件系统只读，`./data` 挂载到 `/data`，并使用 init 进程和 15 秒优雅停止窗口。更新镜像不会删除数据库：
 
 ```bash
 docker compose build --pull
@@ -210,6 +222,37 @@ pnpm test
 
 审阅新生成的 SQL 后，将 schema 与 migration 一起提交。不要修改已经在生产应用过的 migration；应生成新的 migration。SQLite 开启 WAL、外键和 5 秒 busy timeout。
 
+当前正式数据关系为：
+
+```text
+Question 1 ── 0..1 Answer 1 ── 0..n Card
+```
+
+`0001_lovely_cardiac.sql` 只新增 `answers` 与 `cards`，不会重建或修改旧问题表。`0002_nostalgic_kree.sql` 为登录记录生命周期清理增加时间索引。旧问题可以继续读取；管理员首次保存回答时再创建 Answer。
+
+## 数据生命周期维护
+
+维护任务只在独立命令中运行，不占用普通用户请求：
+
+```bash
+# 本地
+pnpm maintenance
+
+# Docker / cron
+docker compose --profile tools run --rm maintenance
+```
+
+任务会删除已过期的管理员 Session、超过 `LOGIN_ATTEMPT_RETENTION_DAYS` 的登录尝试，并执行 SQLite `PRAGMA optimize`。封禁记录和问题内容不会被自动删除。生产环境可用系统 cron 每日调用一次 Docker 命令。
+
+## 自动化质量门禁
+
+`.github/workflows/ci.yml` 在每次 push 和 pull request 上执行：
+
+- frozen lockfile 安装、Prettier、ESLint、TypeScript；
+- Unit、Integration、API 和 Playwright E2E；
+- Next.js production build；
+- Docker Compose 构建、migration、健康检查、SQLite 持久化、重启恢复、维护命令和优雅停止冒烟测试。
+
 ## 备份与恢复
 
 最简单可靠的停机备份：
@@ -250,10 +293,10 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 密码先转换为固定长度 SHA-256 摘要再进行时序安全比较。
 - 登录失败按来源进行 SQLite 计数，15 分钟最多 5 次。
 - 所有输入均通过 Zod 验证；数据库操作使用 Drizzle 参数化查询。
-- 分享卡片只读取已回复问题；临时回答不写入数据库，生成结果禁止共享缓存。
+- 分享卡片只读取持久化 Answer；Card 保存可重放的渲染元数据，生成结果禁止共享缓存。
 - 问题正文只由 React 作为纯文本渲染，不使用 `dangerouslySetInnerHTML`。
 - Content-Security-Policy 仅放行本站与 Turnstile 必需来源，同时设置防嵌套、MIME、防权限滥用响应头。
-- 日志只记录简短错误，不记录原始 IP、管理员密码、Bot Token 或 Turnstile Secret。
+- 日志使用结构化 JSON，只记录简短错误和安全字段，不记录原始 IP、正文、管理员密码、Bot Token 或 Turnstile Secret。
 - 蜜罐、封禁和明显自动广告返回普通成功结果，避免向机器人泄露判定规则。
 
 ## 常见问题
@@ -288,7 +331,7 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 限流使用持久化问题记录；被静默丢弃的自动化请求不会写审计日志。
 - 搜索使用 SQLite `LIKE`，适合个人规模，不提供全文分词。
 - Telegram 仅通知和重试，不实现 webhook 或 Telegram 内回复。
-- Share Card 当前提供单一纸张主题；主题结构已独立，后续可扩展而无需修改渲染接口。
+- Share Card 当前提供单一纸张主题和单页渲染；renderer、版本化元数据与路由已分离，可继续扩展多主题和长文本分页。
 - 项目无法代替上游防火墙/WAF；Cloudflare 与真实 IP 的可信边界必须由部署者配置。
 
 ## License

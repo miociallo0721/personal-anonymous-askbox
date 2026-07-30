@@ -27,6 +27,16 @@ export type ShareCardFormat = {
   answerSize: number;
 };
 
+export type ShareCardRenderPlan = {
+  imageFormat: "png";
+  width: number;
+  height: number;
+  pageCount: number;
+  rendererVersion: number;
+  aspect: ShareCardAspect;
+  theme: ShareCardThemeName;
+};
+
 export const SHARE_CARD_THEMES: Record<ShareCardThemeName, ShareCardTheme> = {
   paper: {
     background: "#F7F5F2",
@@ -64,6 +74,22 @@ export const SHARE_CARD_FORMATS: Record<ShareCardAspect, ShareCardFormat> = {
     answerSize: 32,
   },
 };
+
+export function createShareCardRenderPlan(
+  aspect: ShareCardAspect,
+  theme: ShareCardThemeName,
+): ShareCardRenderPlan {
+  const format = SHARE_CARD_FORMATS[aspect];
+  return {
+    imageFormat: "png",
+    width: format.width,
+    height: format.height,
+    pageCount: 1,
+    rendererVersion: 1,
+    aspect,
+    theme,
+  };
+}
 
 function textUnits(value: string) {
   return Array.from(value).reduce((total, character) => {

@@ -27,6 +27,7 @@ const statusLabels: Record<Status, string> = {
   spam: "垃圾信息",
 };
 const statuses = Object.keys(statusLabels) as Status[];
+const quickStatuses = statuses.filter((status) => status !== "replied");
 const statusBadgeClasses: Record<Status, string> = {
   unread: "badge-accent",
   read: "badge-neutral",
@@ -247,7 +248,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
               </p>
             ) : null}
             <div className="rule-subtle mt-5 flex flex-wrap gap-2 border-t pt-4">
-              {statuses.map((nextStatus) => (
+              {quickStatuses.map((nextStatus) => (
                 <button
                   key={nextStatus}
                   disabled={question.status === nextStatus}
@@ -279,14 +280,12 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
               >
                 重发通知
               </button>
-              {question.status === "replied" ? (
-                <a
-                  href={`/admin/share/${question.id}`}
-                  className="button-compact button-secondary no-underline"
-                >
-                  分享卡片
-                </a>
-              ) : null}
+              <a
+                href={`/admin/share/${question.id}`}
+                className="button-compact button-secondary no-underline"
+              >
+                回复 / 分享卡片
+              </a>
               <button
                 disabled={blocked.some((item) => item.ipHash === question.ipHash)}
                 onClick={() =>

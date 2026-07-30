@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { assessSpam } from "@/lib/spam";
 
-describe("垃圾信息评分", () => {
+describe("垃圾信息评分规则", () => {
   it("不会误伤正常的短问题和中英文混合内容", () => {
     expect(assessSpam("最近还好吗？").action).toBe("accept");
     expect(assessSpam("你怎么看 React 19 的新功能？").score).toBeLessThan(45);

@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+const developmentScriptPolicy =
+  process.env.NODE_ENV === "development"
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com"
+    : "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com";
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -14,7 +19,7 @@ const securityHeaders = [
       "frame-ancestors 'none'",
       "form-action 'self'",
       "object-src 'none'",
-      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+      developmentScriptPolicy,
       "style-src 'self' 'unsafe-inline'",
       "frame-src https://challenges.cloudflare.com",
       "connect-src 'self' https://challenges.cloudflare.com",

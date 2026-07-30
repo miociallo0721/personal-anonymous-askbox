@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { hmacHash, safeEqual } from "@/lib/crypto";
 
-describe("来源哈希", () => {
+describe("来源哈希与摘要比较", () => {
   it("使用密钥生成稳定且不包含原始 IP 的 SHA-256 HMAC", () => {
     const ip = "203.0.113.42";
     const first = hmacHash(ip, "a-secret");
