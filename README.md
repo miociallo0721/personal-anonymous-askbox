@@ -12,6 +12,7 @@
 - 每分钟 1 条、每小时 5 条、每天 15 条的来源限流
 - 单管理员服务端 Session：HttpOnly、Secure（生产环境）、SameSite=Strict
 - 后台搜索、状态筛选、分页、标记未读/已读/已回复/忽略/垃圾信息
+- 已回复问题可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
 - 单条删除、批量删除垃圾信息、封禁/解除来源
 - Telegram 发送结果、`message_id` 和最近错误记录，支持后台手动重发
 - SQLite WAL、Drizzle schema/migration、必要索引和启动自动迁移
@@ -24,6 +25,7 @@
 - SQLite、better-sqlite3、Drizzle ORM
 - Tailwind CSS 4
 - Zod 4、Vitest、ESLint、Prettier
+- Next.js ImageResponse 服务端 PNG 渲染
 - Cloudflare Turnstile、Telegram Bot API
 - pnpm、Docker Compose
 
@@ -67,6 +69,15 @@ DATABASE_URL=file:./data/askbox.db
 ```
 
 打开 `http://localhost:3000`，后台为 `http://localhost:3000/admin`。应用启动时也会幂等执行现有 migration，因此正常启动不会遗漏迁移。
+
+## 分享卡片
+
+1. 在管理后台将问题标记为“已回复”。
+2. 点击该问题操作区中的“分享卡片”。
+3. 输入要展示的回答，选择 1:1、4:5 或 9:16。
+4. 生成并下载 PNG。
+
+卡片由服务端直接排版和渲染，不依赖浏览器截图。三种尺寸分别为 1200×1200、1200×1500 和 1080×1920。回答仅用于当前生成请求，不会写入 SQLite；生成接口仍要求有效的管理员 Session 和同源请求。
 
 常用质量命令：
 
@@ -239,6 +250,7 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 密码先转换为固定长度 SHA-256 摘要再进行时序安全比较。
 - 登录失败按来源进行 SQLite 计数，15 分钟最多 5 次。
 - 所有输入均通过 Zod 验证；数据库操作使用 Drizzle 参数化查询。
+- 分享卡片只读取已回复问题；临时回答不写入数据库，生成结果禁止共享缓存。
 - 问题正文只由 React 作为纯文本渲染，不使用 `dangerouslySetInnerHTML`。
 - Content-Security-Policy 仅放行本站与 Turnstile 必需来源，同时设置防嵌套、MIME、防权限滥用响应头。
 - 日志只记录简短错误，不记录原始 IP、管理员密码、Bot Token 或 Turnstile Secret。
@@ -276,6 +288,7 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 限流使用持久化问题记录；被静默丢弃的自动化请求不会写审计日志。
 - 搜索使用 SQLite `LIKE`，适合个人规模，不提供全文分词。
 - Telegram 仅通知和重试，不实现 webhook 或 Telegram 内回复。
+- Share Card 当前提供单一纸张主题；主题结构已独立，后续可扩展而无需修改渲染接口。
 - 项目无法代替上游防火墙/WAF；Cloudflare 与真实 IP 的可信边界必须由部署者配置。
 
 ## License

@@ -142,8 +142,8 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-7xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10">
-      <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--border)] pb-6">
+    <main className="mx-auto min-h-dvh max-w-6xl px-5 py-5 sm:px-8 sm:py-7 lg:px-10">
+      <header className="rule-subtle flex flex-wrap items-end justify-between gap-6 border-b pb-5">
         <div>
           <p className="eyebrow">ASKBOX ADMIN</p>
           <h1 className="type-heading mt-4">问题管理</h1>
@@ -168,7 +168,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索问题内容"
             aria-label="搜索问题内容"
-            className="field min-w-0 px-3.5 py-2.5 text-sm"
+            className="field min-w-0 px-4 py-2.5 text-sm"
           />
           <select
             value={status}
@@ -177,7 +177,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
               setPage(1);
             }}
             aria-label="按状态筛选"
-            className="field min-w-36 px-3.5 py-2.5 text-sm"
+            className="field min-w-36 px-4 py-2.5 text-sm"
           >
             <option value="">全部状态</option>
             {statuses.map((item) => (
@@ -193,7 +193,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
         </form>
       </section>
 
-      <div className="mt-5 flex min-h-6 items-center justify-between border-b border-[var(--border)] pb-3">
+      <div className="rule-subtle mt-5 flex min-h-6 items-center justify-between border-b pb-3">
         <span className="type-caption uppercase">共 {total} 条</span>
         <span role="status" className="text-xs text-[var(--foreground)]">
           {message}
@@ -238,7 +238,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
                   : "未发送"}
               </span>
             </div>
-            <p className="mt-5 max-w-4xl whitespace-pre-wrap break-words text-[15px] leading-7.5 sm:text-base">
+            <p className="mt-5 max-w-4xl whitespace-pre-wrap break-words text-[15px] leading-[1.8] sm:text-base">
               {question.content}
             </p>
             {question.telegramError ? (
@@ -246,7 +246,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
                 最近错误：{question.telegramError}
               </p>
             ) : null}
-            <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
+            <div className="rule-subtle mt-5 flex flex-wrap gap-2 border-t pt-4">
               {statuses.map((nextStatus) => (
                 <button
                   key={nextStatus}
@@ -262,7 +262,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
                       `问题 #${question.id} 已标记为${statusLabels[nextStatus]}`,
                     )
                   }
-                  className="button-secondary min-h-8 px-2.5 py-1.5 text-xs disabled:bg-[var(--surface-muted)]"
+                  className="button-compact button-secondary disabled:bg-[var(--surface-muted)]"
                 >
                   {statusLabels[nextStatus]}
                 </button>
@@ -275,10 +275,18 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
                     "Telegram 通知已发送",
                   )
                 }
-                className="button-secondary min-h-8 px-2.5 py-1.5 text-xs"
+                className="button-compact button-secondary"
               >
                 重发通知
               </button>
+              {question.status === "replied" ? (
+                <a
+                  href={`/admin/share/${question.id}`}
+                  className="button-compact button-secondary no-underline"
+                >
+                  分享卡片
+                </a>
+              ) : null}
               <button
                 disabled={blocked.some((item) => item.ipHash === question.ipHash)}
                 onClick={() =>
@@ -295,7 +303,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
                     "来源已封禁",
                   )
                 }
-                className="button-secondary min-h-8 px-2.5 py-1.5 text-xs"
+                className="button-compact button-secondary"
               >
                 {blocked.some((item) => item.ipHash === question.ipHash)
                   ? "来源已封禁"
@@ -303,7 +311,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
               </button>
               <button
                 onClick={() => void deleteQuestion(question.id)}
-                className="button-danger ml-auto min-h-8 px-2.5 py-1.5 text-xs"
+                className="button-compact button-danger ml-auto"
               >
                 删除
               </button>
@@ -334,7 +342,7 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
         </nav>
       ) : null}
 
-      <section className="mt-14 border-t border-[var(--border)] pt-7">
+      <section className="rule-subtle mt-14 border-t pt-7">
         <div className="flex items-end justify-between gap-4">
           <div>
             <h2 className="type-section">已封禁来源</h2>
@@ -348,17 +356,17 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
             <table className="w-full min-w-[620px] text-left text-xs">
               <thead className="bg-[var(--surface-muted)] text-[var(--muted)]">
                 <tr>
-                  <th className="p-3 font-medium">来源哈希</th>
-                  <th className="p-3 font-medium">原因</th>
-                  <th className="p-3 font-medium">时间</th>
-                  <th className="p-3 font-medium">操作</th>
+                  <th className="p-3 font-normal">来源哈希</th>
+                  <th className="p-3 font-normal">原因</th>
+                  <th className="p-3 font-normal">时间</th>
+                  <th className="p-3 font-normal">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {blocked.map((source) => (
                   <tr
                     key={source.id}
-                    className="border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-muted)]"
+                    className="rule-subtle border-t transition-colors duration-200 hover:bg-[var(--surface-muted)]"
                   >
                     <td className="max-w-60 truncate p-3 font-mono" title={source.ipHash}>
                       {source.ipHash}

@@ -34,7 +34,7 @@ export function AdminLoginForm() {
 
   return (
     <form onSubmit={submit}>
-      <label htmlFor="password" className="text-sm font-medium">
+      <label htmlFor="password" className="text-sm font-medium text-[var(--foreground)]">
         管理员密码
       </label>
       <input
@@ -45,13 +45,13 @@ export function AdminLoginForm() {
         autoComplete="current-password"
         required
         autoFocus
-        className="field mt-2.5 px-3.5 py-3"
+        className="field mt-3 px-4 py-3"
       />
-      <button disabled={loading || !password} className="button-primary mt-4 w-full">
+      <button disabled={loading || !password} className="button-primary mt-5 w-full">
         {loading ? <span className="loading-mark" aria-hidden="true" /> : null}
         {loading ? "正在登录…" : "登录"}
       </button>
-      <div role="alert" className="mt-3 min-h-6 text-sm text-[var(--danger)]">
+      <div role="alert" className="mt-3 min-h-6 text-sm leading-6 text-[var(--danger)]">
         {error}
       </div>
     </form>
