@@ -56,7 +56,7 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <label htmlFor="question" className="type-section block border-b border-[var(--border)] pb-5">
+      <label htmlFor="question" className="type-section block">
         想问的问题
       </label>
       <textarea
@@ -67,9 +67,9 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         maxLength={2000}
         disabled={submitting}
         placeholder="写下你想问的事情……"
-        className="field mt-6 min-h-44 resize-y px-4 py-3.5 text-[15px] leading-7 sm:min-h-52"
+        className="field mt-5 min-h-48 resize-y px-5 py-4 text-base leading-7 sm:min-h-56"
       />
-      <div className="mt-2.5 flex items-center justify-between gap-4">
+      <div className="mt-3 flex items-center justify-between gap-4">
         <span className="type-caption">请勿提交敏感个人信息</span>
         <span
           className={`type-caption tabular-nums ${length > 1000 ? "text-[var(--danger)]" : ""}`}
@@ -99,13 +99,13 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         </div>
       ) : null}
 
-      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-h-6" role="status" aria-live="polite">
+      <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-6 text-sm leading-6" role="status" aria-live="polite">
           {notice ? (
             <p
-              className={`text-sm ${
+              className={
                 notice.kind === "success" ? "text-[var(--success)]" : "text-[var(--danger)]"
-              }`}
+              }
             >
               {notice.text}
             </p>
