@@ -5,6 +5,23 @@ import path from "node:path";
 const questionText = "E2E：你最近留意到什么安静的小事？";
 const answerText = "傍晚时，窗边的光比昨天停留得更久。";
 
+test.beforeEach(() => {
+  const sqlite = new Database(path.resolve("data/e2e.db"));
+  try {
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.exec(`
+      DELETE FROM cards;
+      DELETE FROM answers;
+      DELETE FROM questions;
+      DELETE FROM admin_sessions;
+      DELETE FROM admin_login_attempts;
+      DELETE FROM blocked_sources;
+    `);
+  } finally {
+    sqlite.close();
+  }
+});
+
 test("anonymous submission through persisted answer and share-card export", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("想问的问题").fill(questionText);
@@ -36,7 +53,11 @@ test("anonymous submission through persisted answer and share-card export", asyn
   sqlite.close();
 
   const receivedResponse = await page.goto(statusPath!);
-  expect(receivedResponse?.headers()["cache-control"]).toContain("no-store");
+  const cacheControl = receivedResponse?.headers()["cache-control"] ?? "";
+  // Next.js development mode enforces `no-cache`; production adds the stricter
+  // `private, no-store` policy verified by the route/API tests.
+  expect(cacheControl).toMatch(/no-store|no-cache/);
+  expect(cacheControl).not.toContain("public");
   expect(receivedResponse?.headers()["x-robots-tag"]).toContain("noindex");
   expect(receivedResponse?.headers()["referrer-policy"]).toBe("no-referrer");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
