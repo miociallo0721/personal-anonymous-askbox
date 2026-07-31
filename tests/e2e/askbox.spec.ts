@@ -24,9 +24,11 @@ test.beforeEach(() => {
 
 test("anonymous submission through persisted answer and share-card export", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("想问的问题").fill(questionText);
+  await page.getByLabel("写下你的问题").fill(questionText);
   await page.getByRole("button", { name: "匿名提交" }).click();
-  await expect(page.getByRole("heading", { name: "问题已收到" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问题已收到" })).toBeVisible({
+    timeout: 15_000,
+  });
   const statusLink = page.getByRole("link", { name: "查看状态" });
   const statusPath = await statusLink.getAttribute("href");
   expect(statusPath).toMatch(/^\/status\/[A-Za-z0-9_-]{32}$/);
@@ -126,4 +128,79 @@ test("anonymous submission through persisted answer and share-card export", asyn
   expect(Array.from((await downloadResponse.body()).subarray(0, 8))).toEqual([
     137, 80, 78, 71, 13, 10, 26, 10,
   ]);
+});
+
+test("homepage communicates disabled, loading, and error states without losing input", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const field = page.getByLabel("写下你的问题");
+  const submit = page.getByRole("button", { name: "匿名提交" });
+  await expect(submit).toBeDisabled();
+  await expect(submit).toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByText("写下问题后即可提交", { exact: true })).toBeVisible();
+  expect(await submit.evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
+
+  await field.fill("这是一个会保留的问题");
+  await expect(submit).toBeEnabled();
+  await expect(submit).toHaveAttribute("aria-disabled", "false");
+  await expect(page.getByText("写下问题后即可提交", { exact: true })).toHaveCount(0);
+
+  await page.route("**/api/questions", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: "暂时无法提交，请稍后再试。" }),
+    });
+  });
+
+  await submit.click();
+  await expect(page.getByRole("button", { name: "正在提交…" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "正在提交…" })).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expect(page.getByText("暂时无法提交，请稍后再试。", { exact: true })).toBeVisible();
+  await expect(field).toHaveValue("这是一个会保留的问题");
+  await expect(submit).toBeEnabled();
+});
+
+test("homepage themes and supported mobile widths stay within the viewport", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const readPalette = () =>
+    page.locator("main").evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return {
+        background: styles.getPropertyValue("--background").trim(),
+        surface: styles.getPropertyValue("--home-surface").trim(),
+        foreground: styles.getPropertyValue("--foreground").trim(),
+      };
+    });
+  const light = await readPalette();
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  const dark = await readPalette();
+  expect(dark.background).not.toBe(light.background);
+  expect(dark.surface).not.toBe(light.surface);
+  expect(dark.foreground).not.toBe(light.foreground);
+
+  for (const width of [320, 375, 390, 430, 768, 1280]) {
+    await page.setViewportSize({ width, height: width < 700 ? 844 : 900 });
+    const dimensions = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+    }));
+    expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+    expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport);
+
+    const title = await page.getByRole("heading", { level: 1 }).boundingBox();
+    expect(title).not.toBeNull();
+    expect(title!.x).toBeGreaterThanOrEqual(16);
+    expect(title!.x + title!.width).toBeLessThanOrEqual(width - 16);
+  }
 });

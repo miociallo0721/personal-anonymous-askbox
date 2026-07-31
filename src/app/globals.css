@@ -127,10 +127,12 @@ a:focus-visible {
 
 .type-hero {
   font-family: var(--font-editorial);
-  font-size: clamp(2.55rem, 5.2vw, 4.35rem);
+  max-width: 8.8em;
+  font-size: clamp(2.375rem, 6.4vw, 4.1rem);
   font-weight: 400;
   letter-spacing: -0.028em;
-  line-height: 1.08;
+  line-height: 1.11;
+  text-wrap: balance;
 }
 
 .type-heading {
@@ -353,6 +355,100 @@ a:focus-visible {
 
 .quiet-link:hover {
   opacity: 0.72;
+}
+
+.home-page {
+  --home-surface: color-mix(in srgb, var(--surface) 88%, var(--background));
+  --home-surface-border: color-mix(in srgb, var(--border) 64%, transparent);
+  --home-field: color-mix(in srgb, var(--surface) 94%, var(--background));
+  --home-field-border: color-mix(in srgb, var(--border) 66%, transparent);
+  --home-placeholder: color-mix(in srgb, var(--muted) 86%, transparent);
+  --home-submit-disabled: #746e67;
+  --home-submit-disabled-border: #746e67;
+  --home-submit-disabled-foreground: #f4f0e9;
+  padding-bottom: calc(1.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+.home-shell {
+  min-height: calc(100dvh - 3rem - env(safe-area-inset-bottom, 0px));
+}
+
+.askbox-surface {
+  border-color: var(--home-surface-border);
+  background: var(--home-surface);
+}
+
+.question-field {
+  border-color: var(--home-field-border);
+  background: var(--home-field);
+  box-shadow: none;
+}
+
+.question-field::placeholder {
+  color: var(--home-placeholder);
+}
+
+.question-field:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border-strong) 48%, var(--border));
+}
+
+.question-field:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 82%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.turnstile-region {
+  display: flex;
+  min-height: 140px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.question-submit {
+  min-width: 8.25rem;
+}
+
+.question-submit:disabled {
+  border-color: var(--home-submit-disabled-border);
+  background: var(--home-submit-disabled);
+  color: var(--home-submit-disabled-foreground);
+  opacity: 1;
+}
+
+.submit-helper {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.home-footer {
+  padding-top: 1.25rem;
+}
+
+@media (max-width: 359px) {
+  .type-hero {
+    max-width: 8.25em;
+    font-size: clamp(2.2rem, 11.5vw, 2.375rem);
+  }
+}
+
+@media (min-width: 640px) {
+  .home-shell {
+    min-height: calc(100dvh - 4rem - env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-page {
+    --home-surface: color-mix(in srgb, var(--surface) 90%, var(--background));
+    --home-surface-border: color-mix(in srgb, var(--border) 58%, transparent);
+    --home-field: color-mix(in srgb, var(--surface) 84%, var(--background));
+    --home-field-border: color-mix(in srgb, var(--border) 64%, transparent);
+    --home-placeholder: color-mix(in srgb, var(--muted) 78%, transparent);
+    --home-submit-disabled: #332f2b;
+    --home-submit-disabled-border: #433e38;
+    --home-submit-disabled-foreground: #aaa198;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -7,8 +7,8 @@ export default function HomePage() {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
   return (
-    <main className="min-h-dvh px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
-      <div className="mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-[68rem] flex-col sm:min-h-[calc(100dvh-3.5rem)]">
+    <main className="home-page min-h-dvh px-5 pt-5 sm:px-8 sm:pt-7 lg:px-12">
+      <div className="home-shell mx-auto flex w-full max-w-[68rem] flex-col">
         <header className="rule-subtle flex items-center justify-between border-b pb-3">
           <p className="font-editorial text-[15px] tracking-[-0.01em] text-[var(--foreground)]">
             ANONYMOUS ASK BOX
@@ -24,12 +24,12 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="surface p-5 sm:p-8">
+          <div className="askbox-surface surface p-5 sm:p-8">
             <QuestionForm turnstileEnabled={turnstileEnabled} siteKey={siteKey} />
           </div>
         </section>
 
-        <footer className="rule-subtle border-t pt-4 text-[11px] leading-5 text-[var(--muted)]">
+        <footer className="home-footer rule-subtle border-t text-[11px] leading-5 text-[var(--muted)]">
           <p>仅保存经过单向处理的来源特征，不保存原始 IP 或浏览器信息。</p>
         </footer>
       </div>

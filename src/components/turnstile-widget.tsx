@@ -10,6 +10,7 @@ declare global {
         options: {
           sitekey: string;
           theme: "auto";
+          size: "compact";
           callback: (token: string) => void;
           "expired-callback": () => void;
           "error-callback": () => void;
@@ -33,6 +34,7 @@ export function TurnstileWidget({ siteKey, onToken }: Props) {
       widgetId = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         theme: "auto",
+        size: "compact",
         callback: onToken,
         "expired-callback": () => onToken(""),
         "error-callback": () => onToken(""),
@@ -60,5 +62,5 @@ export function TurnstileWidget({ siteKey, onToken }: Props) {
     };
   }, [onToken, siteKey]);
 
-  return <div ref={containerRef} className="min-h-[65px]" aria-label="人机验证" />;
+  return <div ref={containerRef} className="turnstile-region" aria-label="人机验证" />;
 }
