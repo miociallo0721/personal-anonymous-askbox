@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { STATUS_TOKEN_LENGTH, STATUS_TOKEN_PATTERN } from "@/lib/status-token";
+
 export const questionContentSchema = z
   .string()
   .transform((value) => value.trim())
@@ -23,3 +25,9 @@ export const answerContentSchema = z
   .refine((value) => Array.from(value).length <= 600, "回答不能超过 600 个字符");
 
 export const saveAnswerSchema = z.object({ content: answerContentSchema });
+
+export const statusTokenSchema = z
+  .string()
+  .max(STATUS_TOKEN_LENGTH)
+  .length(STATUS_TOKEN_LENGTH)
+  .regex(STATUS_TOKEN_PATTERN);

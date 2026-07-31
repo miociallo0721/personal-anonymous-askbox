@@ -4,6 +4,7 @@ import type { createDatabase } from "@/db/client";
 import { blockedSources, questions, type Question } from "@/db/schema";
 import { RATE_LIMITS, evaluateRateLimits } from "@/lib/rate-limit";
 import { assessSpam } from "@/lib/spam";
+import { generateStatusToken, hashStatusToken } from "@/lib/status-token";
 import { sendQuestionToTelegram } from "@/lib/telegram";
 
 type DatabaseClient = ReturnType<typeof createDatabase>["db"];
@@ -17,8 +18,8 @@ export type SubmissionInput = {
 };
 
 export type SubmissionResult =
-  | { kind: "saved"; id: number }
-  | { kind: "silent" }
+  | { kind: "saved"; id: number; statusToken: string }
+  | { kind: "silent"; statusToken: string }
   | { kind: "rate-limited"; retryAfterSeconds: number };
 
 export async function saveQuestion(
@@ -27,6 +28,8 @@ export async function saveQuestion(
   notify: Notify = sendQuestionToTelegram,
 ): Promise<SubmissionResult> {
   const now = input.now ?? new Date();
+  const statusToken = generateStatusToken();
+  const statusTokenHash = hashStatusToken(statusToken);
 
   const outcome = database.transaction((tx) => {
     const blocked = tx
@@ -34,7 +37,7 @@ export async function saveQuestion(
       .from(blockedSources)
       .where(eq(blockedSources.ipHash, input.ipHash))
       .get();
-    if (blocked) return { kind: "silent" as const };
+    if (blocked) return { kind: "silent" as const, statusToken };
 
     const counts = RATE_LIMITS.map((limit) => ({
       windowMs: limit.windowMs,
@@ -67,13 +70,16 @@ export async function saveQuestion(
       )
       .get();
     const assessment = assessSpam(input.content, Boolean(duplicate));
-    if (assessment.action === "discard") return { kind: "silent" as const };
+    if (assessment.action === "discard") {
+      return { kind: "silent" as const, statusToken };
+    }
 
     const created = tx
       .insert(questions)
       .values({
         content: input.content,
         status: assessment.action === "mark-spam" ? "spam" : "unread",
+        statusTokenHash,
         ipHash: input.ipHash,
         userAgentHash: input.userAgentHash,
         spamScore: assessment.score,
@@ -98,5 +104,5 @@ export async function saveQuestion(
       .where(eq(questions.id, outcome.question.id))
       .run();
   }
-  return { kind: "saved", id: outcome.question.id };
+  return { kind: "saved", id: outcome.question.id, statusToken };
 }

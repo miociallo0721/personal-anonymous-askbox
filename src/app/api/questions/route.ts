@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/db/client";
 import { apiError, apiSuccess, safeRouteError } from "@/lib/api";
 import { hasValidMutationOrigin, requestFingerprints } from "@/lib/request-security";
+import { generateStatusToken } from "@/lib/status-token";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { submitQuestionSchema } from "@/lib/validation";
 import { saveQuestion } from "@/services/submission";
@@ -17,7 +18,15 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return apiError(parsed.error.issues[0]?.message ?? "问题内容无效", 400);
     }
-    if (parsed.data.website) return apiSuccess({ message: "已经收到" });
+    if (parsed.data.website) {
+      return apiSuccess(
+        {
+          message: "已经收到",
+          statusPath: `/status/${generateStatusToken()}`,
+        },
+        201,
+      );
+    }
 
     const fingerprints = requestFingerprints(request);
     const turnstileValid = await verifyTurnstile(parsed.data.turnstileToken, fingerprints.ip);
@@ -31,7 +40,13 @@ export async function POST(request: NextRequest) {
     if (result.kind === "rate-limited") {
       return apiError("提交得有些快，请稍后再试", 429);
     }
-    return apiSuccess({ message: "已经收到" }, 201);
+    return apiSuccess(
+      {
+        message: "已经收到",
+        statusPath: `/status/${result.statusToken}`,
+      },
+      201,
+    );
   } catch (error) {
     return safeRouteError("submit-question", error);
   }

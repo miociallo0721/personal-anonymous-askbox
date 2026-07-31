@@ -3,6 +3,8 @@ import type { NextRequest } from "next/server";
 import { hmacHash } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 
+type HeaderReader = Pick<Headers, "get">;
+
 function cleanIp(value: string | null) {
   if (!value) return null;
   const ip = value.trim();
@@ -10,17 +12,21 @@ function cleanIp(value: string | null) {
   return ip;
 }
 
-export function getClientIp(request: NextRequest) {
+export function getClientIpFromHeaders(headers: HeaderReader) {
   const env = getEnv();
   if (env.TRUST_CLOUDFLARE_PROXY) {
-    const cloudflareIp = cleanIp(request.headers.get("cf-connecting-ip"));
+    const cloudflareIp = cleanIp(headers.get("cf-connecting-ip"));
     if (cloudflareIp) return cloudflareIp;
   }
   if (env.TRUST_PROXY) {
-    const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0] ?? null;
-    return cleanIp(forwarded) ?? cleanIp(request.headers.get("x-real-ip")) ?? "unknown";
+    const forwarded = headers.get("x-forwarded-for")?.split(",")[0] ?? null;
+    return cleanIp(forwarded) ?? cleanIp(headers.get("x-real-ip")) ?? "unknown";
   }
   return process.env.NODE_ENV === "development" ? "127.0.0.1" : "unknown";
+}
+
+export function getClientIp(request: NextRequest) {
+  return getClientIpFromHeaders(request.headers);
 }
 
 export function requestFingerprints(request: NextRequest) {

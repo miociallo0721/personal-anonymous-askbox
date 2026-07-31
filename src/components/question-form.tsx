@@ -6,6 +6,9 @@ import { TurnstileWidget } from "@/components/turnstile-widget";
 
 type Props = { turnstileEnabled: boolean; siteKey: string };
 type Notice = { kind: "success" | "error"; text: string } | null;
+type StatusLink = { path: string; url: string } | null;
+
+const statusPathPattern = /^\/status\/[A-Za-z0-9_-]{32}$/;
 
 export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
   const [content, setContent] = useState("");
@@ -14,6 +17,8 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
   const [widgetKey, setWidgetKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [statusLink, setStatusLink] = useState<StatusLink>(null);
+  const [copyNotice, setCopyNotice] = useState("");
   const length = Array.from(content).length;
   const onToken = useCallback((value: string) => setToken(value), []);
 
@@ -37,11 +42,21 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ content, website, turnstileToken: token }),
       });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        statusPath?: string;
+      };
       if (!response.ok || !data.ok) throw new Error(data.error ?? "提交失败，请稍后重试。");
+      if (!data.statusPath || !statusPathPattern.test(data.statusPath)) {
+        throw new Error("状态链接生成失败，请稍后重试。");
+      }
+      const absoluteStatusUrl = new URL(data.statusPath, window.location.origin).toString();
       setContent("");
       setWebsite("");
-      setNotice({ kind: "success", text: "已经收到，谢谢你的提问。" });
+      setStatusLink({ path: data.statusPath, url: absoluteStatusUrl });
+      setCopyNotice("");
+      setNotice(null);
     } catch (error) {
       setNotice({
         kind: "error",
@@ -51,6 +66,16 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
       setToken("");
       setWidgetKey((value) => value + 1);
       setSubmitting(false);
+    }
+  }
+
+  async function copyStatusLink() {
+    if (!statusLink) return;
+    try {
+      await navigator.clipboard.writeText(statusLink.url);
+      setCopyNotice("链接已复制。");
+    } catch {
+      setCopyNotice("复制失败，请手动选择并保存链接。");
     }
   }
 
@@ -97,6 +122,45 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         <div className="mt-5">
           <TurnstileWidget key={widgetKey} siteKey={siteKey} onToken={onToken} />
         </div>
+      ) : null}
+
+      {statusLink ? (
+        <section
+          className="rule-subtle mt-7 border-t pt-7"
+          aria-labelledby="submission-success-title"
+        >
+          <h2 id="submission-success-title" className="type-section">
+            问题已收到
+          </h2>
+          <p className="type-body mt-3">
+            请保存此链接。你可以稍后通过它查看回复，我们无法在链接丢失后帮你找回。
+          </p>
+          <label htmlFor="status-link" className="type-caption mt-5 block">
+            私密状态链接
+          </label>
+          <input
+            id="status-link"
+            value={statusLink.url}
+            readOnly
+            className="field mt-2 px-3 py-2 text-sm"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={copyStatusLink}
+              className="button-secondary w-full sm:w-auto"
+            >
+              复制状态链接
+            </button>
+            <a href={statusLink.path} className="button-primary w-full no-underline sm:w-auto">
+              查看状态
+            </a>
+          </div>
+          <p className="mt-2 min-h-5 text-xs leading-5 text-[var(--muted)]" role="status">
+            {copyNotice}
+          </p>
+        </section>
       ) : null}
 
       <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">

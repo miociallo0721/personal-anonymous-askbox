@@ -34,7 +34,16 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: true },
   serverExternalPackages: ["better-sqlite3"],
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    const privateStatusHeaders = [
+      { key: "Cache-Control", value: "private, no-store, max-age=0" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+    ];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      { source: "/status/:path*", headers: privateStatusHeaders },
+      { source: "/api/status/:path*", headers: privateStatusHeaders },
+    ];
   },
 };
 
