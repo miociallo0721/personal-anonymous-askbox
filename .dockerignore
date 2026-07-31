@@ -1,11 +1,14 @@
 .git
 .gitignore
 .next
+.next-e2e
 node_modules
 data
 .env
 .env.*
 !.env.example
 coverage
+playwright-report
+test-results
 *.log
 README.md

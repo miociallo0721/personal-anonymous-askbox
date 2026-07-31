@@ -64,5 +64,52 @@ export const adminLoginAttempts = sqliteTable(
   (table) => [index("admin_login_attempts_ip_created_idx").on(table.ipHash, table.createdAt)],
 );
 
+export const answers = sqliteTable(
+  "answers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    questionId: integer("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [uniqueIndex("answers_question_id_unique").on(table.questionId)],
+);
+
+export const cardAspects = ["1:1", "4:5", "9:16"] as const;
+export type CardAspect = (typeof cardAspects)[number];
+
+export const cards = sqliteTable(
+  "cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    answerId: integer("answer_id")
+      .notNull()
+      .references(() => answers.id, { onDelete: "cascade" }),
+    aspect: text("aspect", { enum: cardAspects }).notNull(),
+    theme: text("theme").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    contentHash: text("content_hash").notNull(),
+    rendererVersion: text("renderer_version").notNull(),
+    pageNumber: integer("page_number").notNull().default(1),
+    pageCount: integer("page_count").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("cards_answer_id_idx").on(table.answerId),
+    index("cards_created_at_idx").on(table.createdAt),
+    index("cards_content_hash_idx").on(table.contentHash),
+  ],
+);
+
 export type Question = typeof questions.$inferSelect;
 export type NewQuestion = typeof questions.$inferInsert;
+export type Answer = typeof answers.$inferSelect;
+export type NewAnswer = typeof answers.$inferInsert;
+export type Card = typeof cards.$inferSelect;
+export type NewCard = typeof cards.$inferInsert;

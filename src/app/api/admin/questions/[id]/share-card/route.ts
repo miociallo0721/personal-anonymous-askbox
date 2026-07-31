@@ -1,19 +1,17 @@
 import { eq } from "drizzle-orm";
-import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ShareCard } from "@/components/share-card";
 import { db } from "@/db/client";
-import { questions } from "@/db/schema";
+import { answers, questions } from "@/db/schema";
 import { apiError, authorizeAdmin, safeRouteError } from "@/lib/api";
-import { SHARE_CARD_ASPECTS, SHARE_CARD_FORMATS, SHARE_CARD_THEME_NAMES } from "@/lib/share-card";
+import { SHARE_CARD_ASPECTS, SHARE_CARD_THEME_NAMES } from "@/lib/share-card";
 import { idSchema } from "@/lib/validation";
+import { exportShareCard } from "@/services/cards";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  answer: z.string().trim().min(2).max(600),
   aspect: z.enum(SHARE_CARD_ASPECTS),
   theme: z.enum(SHARE_CARD_THEME_NAMES).default("paper"),
 });
@@ -31,40 +29,42 @@ export async function POST(request: NextRequest, context: Context) {
     ];
     if (!id.success || !body.success) return apiError("分享卡片参数无效");
 
-    const question = db
+    const result = db
       .select({
-        id: questions.id,
-        content: questions.content,
-        status: questions.status,
+        question: {
+          id: questions.id,
+          content: questions.content,
+        },
+        answer: {
+          id: answers.id,
+          content: answers.content,
+        },
       })
       .from(questions)
+      .innerJoin(answers, eq(answers.questionId, questions.id))
       .where(eq(questions.id, id.data))
       .get();
-    if (!question) return apiError("问题不存在", 404);
-    if (question.status !== "replied") return apiError("仅已回复的问题可以生成分享卡片", 409);
+    if (!result) return apiError("请先保存回答", 409);
 
-    const format = SHARE_CARD_FORMATS[body.data.aspect];
-    const filename = `askbox-${question.id}-${body.data.aspect.replace(":", "x")}.png`;
+    const exported = await exportShareCard(db, {
+      question: result.question,
+      answer: result.answer,
+      aspect: body.data.aspect,
+      theme: body.data.theme,
+    });
+    const filename = `askbox-${result.question.id}-${body.data.aspect.replace(":", "x")}.png`;
+    const responseBody = Uint8Array.from(exported.bytes).buffer;
 
-    return new ImageResponse(
-      ShareCard({
-        data: {
-          question: question.content.trim(),
-          answer: body.data.answer,
-        },
-        aspect: body.data.aspect,
-        themeName: body.data.theme,
-      }),
-      {
-        width: format.width,
-        height: format.height,
-        headers: {
-          "Cache-Control": "private, no-store, max-age=0",
-          "Content-Disposition": `attachment; filename="${filename}"`,
-          "X-Content-Type-Options": "nosniff",
-        },
+    return new Response(responseBody, {
+      status: 200,
+      headers: {
+        "Content-Type": exported.mimeType,
+        "Content-Length": String(exported.bytes.byteLength),
+        "Cache-Control": "private, no-store, max-age=0",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Content-Type-Options": "nosniff",
       },
-    );
+    });
   } catch (error) {
     return safeRouteError("admin-share-card", error);
   }

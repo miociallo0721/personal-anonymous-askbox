@@ -9,6 +9,7 @@ type Props = {
   question: {
     id: number;
     content: string;
+    answer: string;
   };
 };
 
@@ -26,7 +27,7 @@ function blobToDataUrl(blob: Blob) {
 }
 
 export function ShareCardGenerator({ question }: Props) {
-  const [answer, setAnswer] = useState("");
+  const [answer, setAnswer] = useState(question.answer);
   const [aspect, setAspect] = useState<ShareCardAspect>("4:5");
   const [generating, setGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
@@ -45,10 +46,20 @@ export function ShareCardGenerator({ question }: Props) {
     setGenerating(true);
     setNotice(null);
     try {
+      const saveResponse = await fetch(`/api/admin/questions/${question.id}/answer`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: answer }),
+      });
+      if (!saveResponse.ok) {
+        const data = (await saveResponse.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "回答保存失败，请稍后重试。");
+      }
+
       const response = await fetch(`/api/admin/questions/${question.id}/share-card`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answer, aspect, theme: "paper" }),
+        body: JSON.stringify({ aspect, theme: "paper" }),
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -95,7 +106,7 @@ export function ShareCardGenerator({ question }: Props) {
             className="field mt-4 min-h-52 resize-y px-5 py-4 text-base leading-7"
           />
           <div className="mt-3 flex items-center justify-between gap-4">
-            <span className="type-caption">答案仅用于本次生成，不会写入数据库</span>
+            <span className="type-caption">回答会安全保存，并用于后续重新生成</span>
             <span className="type-caption tabular-nums">{answerLength} / 600</span>
           </div>
         </div>

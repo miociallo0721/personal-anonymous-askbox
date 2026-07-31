@@ -1,32 +1,12 @@
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-
-import { createDatabase } from "@/db/client";
 import { questions } from "@/db/schema";
 import { saveQuestion } from "@/services/submission";
+import { describe, expect, it } from "vitest";
 
-const temporaryDirectories: string[] = [];
-
-function testDatabase() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "askbox-test-"));
-  temporaryDirectories.push(directory);
-  const database = createDatabase(`file:${path.join(directory, "test.db")}`);
-  migrate(database.db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
-  return database;
-}
-
-afterEach(() => {
-  for (const directory of temporaryDirectories.splice(0)) {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-});
+import { createTestDatabase } from "../helpers/database";
 
 describe("问题提交", () => {
   it("Telegram 推送异常时问题仍会成功保存", async () => {
-    const database = testDatabase();
+    const database = createTestDatabase();
     const result = await saveQuestion(
       database.db,
       {
@@ -49,7 +29,7 @@ describe("问题提交", () => {
   });
 
   it("每分钟第二次提交会被数据库限流", async () => {
-    const database = testDatabase();
+    const database = createTestDatabase();
     const notify = async () => ({ success: true });
     const input = {
       content: "第一个正常问题",

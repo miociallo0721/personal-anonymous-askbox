@@ -1,0 +1,15 @@
+services:
+  askbox:
+    image: personal-askbox-ci:validation
+    ports: !override
+      - "127.0.0.1:33101:3000"
+    volumes: !override
+      - askbox-ci-data:/data
+
+  maintenance:
+    image: personal-askbox-ci:validation
+    volumes: !override
+      - askbox-ci-data:/data
+
+volumes:
+  askbox-ci-data:

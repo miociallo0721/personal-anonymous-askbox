@@ -5,10 +5,11 @@ services:
       args:
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     image: personal-askbox:latest
-    container_name: personal-askbox
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
     env_file:
-      - .env
+      - ${ASKBOX_ENV_FILE:-.env}
     environment:
       DATABASE_URL: file:/data/askbox.db
       NODE_ENV: production
@@ -37,3 +38,25 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+
+  maintenance:
+    image: personal-askbox:latest
+    profiles:
+      - maintenance
+    init: true
+    env_file:
+      - ${ASKBOX_ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: file:/data/askbox.db
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command: ["node", "scripts/maintenance.mjs"]

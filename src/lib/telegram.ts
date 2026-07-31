@@ -7,6 +7,7 @@ import { getEnv } from "@/lib/env";
 import { formatShanghaiTime } from "@/lib/time";
 
 type DatabaseClient = typeof import("@/db/client").db;
+type Fetcher = typeof fetch;
 
 const telegramResponse = z.object({
   ok: z.boolean(),
@@ -19,9 +20,26 @@ function errorSummary(error: unknown) {
   return message.replace(/[\r\n]+/g, " ").slice(0, 300);
 }
 
-export async function sendQuestionToTelegram(question: Question, database: DatabaseClient) {
+export async function sendQuestionToTelegram(
+  question: Question,
+  database: DatabaseClient,
+  fetcher: Fetcher = fetch,
+) {
   const env = getEnv();
   const now = new Date();
+  if (env.EXTERNAL_SERVICES_MODE === "mock") {
+    const messageId = 900_000 + question.id;
+    await database
+      .update(questions)
+      .set({
+        telegramNotified: true,
+        telegramMessageId: messageId,
+        telegramError: null,
+        updatedAt: now,
+      })
+      .where(eq(questions.id, question.id));
+    return { success: true as const, messageId };
+  }
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.ADMIN_PUBLIC_URL) {
     const error = "Telegram 未完整配置";
     await database
@@ -42,7 +60,7 @@ export async function sendQuestionToTelegram(question: Question, database: Datab
   const text = `📨 新的匿名提问 #${question.id}\n\n${content}\n\n时间：${formatShanghaiTime(question.createdAt)}`;
 
   try {
-    const response = await fetch(
+    const response = await fetcher(
       `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: "POST",

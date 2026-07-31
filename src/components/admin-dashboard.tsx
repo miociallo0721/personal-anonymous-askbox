@@ -279,12 +279,12 @@ export function AdminDashboard({ initialQuestionId }: { initialQuestionId?: numb
               >
                 重发通知
               </button>
-              {question.status === "replied" ? (
+              {question.status !== "spam" ? (
                 <a
                   href={`/admin/share/${question.id}`}
                   className="button-compact button-secondary no-underline"
                 >
-                  分享卡片
+                  回答与分享
                 </a>
               ) : null}
               <button

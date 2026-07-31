@@ -15,3 +15,11 @@ export const submitQuestionSchema = z.object({
 export const loginSchema = z.object({ password: z.string().min(1).max(1024) });
 
 export const idSchema = z.coerce.number().int().positive();
+
+export const answerContentSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => Array.from(value).length >= 2, "回答至少需要 2 个字符")
+  .refine((value) => Array.from(value).length <= 600, "回答不能超过 600 个字符");
+
+export const saveAnswerSchema = z.object({ content: answerContentSchema });
