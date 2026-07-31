@@ -18,7 +18,7 @@ describe("database migrations", () => {
     database.close();
   });
 
-  it("adds Answer and Card tables without rewriting legacy questions", () => {
+  it("adds Answer, Card and private-status fields without rewriting legacy questions", () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "askbox-legacy-"));
     const sqlite = new Database(path.join(directory, "legacy.db"));
     const executeMigration = (filename: string) => {
@@ -44,9 +44,13 @@ describe("database migrations", () => {
         .run("迁移前的问题", "a".repeat(64), "b".repeat(64), 1, 1);
 
       executeMigration("drizzle/0001_puzzling_dreaming_celestial.sql");
+      executeMigration("drizzle/0002_private_status_links.sql");
 
-      expect(sqlite.prepare("SELECT content FROM questions").get()).toEqual({
+      expect(
+        sqlite.prepare("SELECT content, status_token_hash AS statusTokenHash FROM questions").get(),
+      ).toEqual({
         content: "迁移前的问题",
+        statusTokenHash: null,
       });
       expect(
         sqlite
@@ -55,6 +59,24 @@ describe("database migrations", () => {
           )
           .all(),
       ).toHaveLength(2);
+      expect(
+        sqlite
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'questions_status_token_hash_unique'",
+          )
+          .get(),
+      ).toEqual({ name: "questions_status_token_hash_unique" });
+
+      executeMigration("drizzle/rollback/0002_private_status_links.sql");
+      expect(
+        sqlite
+          .prepare("PRAGMA table_info(questions)")
+          .all()
+          .some((column) => (column as { name: string }).name === "status_token_hash"),
+      ).toBe(false);
+      expect(sqlite.prepare("SELECT content FROM questions").get()).toEqual({
+        content: "迁移前的问题",
+      });
     } finally {
       sqlite.close();
       fs.rmSync(directory, { recursive: true, force: true });

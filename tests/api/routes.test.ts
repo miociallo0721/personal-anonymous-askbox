@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminLoginAttempts, blockedSources, questions } from "@/db/schema";
 import { hmacHash } from "@/lib/crypto";
 import { resetEnvForTests } from "@/lib/env";
+import { hashStatusToken } from "@/lib/status-token";
 
 import { createTestDatabase } from "../helpers/database";
 
@@ -68,6 +69,28 @@ afterEach(() => {
 });
 
 describe("public question API", () => {
+  it("returns a private status path while persisting only its digest", async () => {
+    const { POST } = await import("@/app/api/questions/route");
+    const response = await POST(
+      jsonRequest("https://ask.example.com/api/questions", {
+        content: "如何在之后查看回答？",
+        turnstileToken: "token",
+      }),
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      statusPath: string;
+    };
+    const token = body.statusPath.replace("/status/", "");
+    const saved = database.db.select().from(questions).get();
+
+    expect(response.status).toBe(201);
+    expect(body.statusPath).toMatch(/^\/status\/[A-Za-z0-9_-]{32}$/);
+    expect(body.statusPath).not.toBe(`/status/${saved?.id}`);
+    expect(saved?.statusTokenHash).toBe(hashStatusToken(token));
+    expect(JSON.stringify(saved)).not.toContain(token);
+  });
+
   it("rejects invalid origins before writing data", async () => {
     const { POST } = await import("@/app/api/questions/route");
     const response = await POST(
@@ -92,6 +115,23 @@ describe("public question API", () => {
     );
     expect(response.status).toBe(400);
     expect(database.db.select().from(questions).all()).toHaveLength(0);
+  });
+
+  it("returns an ordinary-looking decoy link for the honeypot without persisting it", async () => {
+    const { POST } = await import("@/app/api/questions/route");
+    const response = await POST(
+      jsonRequest("https://ask.example.com/api/questions", {
+        content: "自动提交内容",
+        turnstileToken: "",
+        website: "https://spam.example",
+      }),
+    );
+    const body = (await response.json()) as { statusPath: string };
+
+    expect(response.status).toBe(201);
+    expect(body.statusPath).toMatch(/^\/status\/[A-Za-z0-9_-]{32}$/);
+    expect(database.db.select().from(questions).all()).toHaveLength(0);
+    expect(turnstileCheck).not.toHaveBeenCalled();
   });
 
   it("enforces persistent rate limits", async () => {
@@ -128,6 +168,36 @@ describe("public question API", () => {
     );
     expect(response.status).toBe(201);
     expect(database.db.select().from(questions).all()).toHaveLength(0);
+  });
+});
+
+describe("private question status API", () => {
+  it("returns one indistinguishable response for malformed and missing tokens", async () => {
+    const { GET } = await import("@/app/api/status/[token]/route");
+    const request = new NextRequest("https://ask.example.com/api/status/invalid", {
+      headers: { host: "ask.example.com" },
+    });
+    const malformed = await GET(request, {
+      params: Promise.resolve({ token: "invalid!" }),
+    });
+    const missing = await GET(request, {
+      params: Promise.resolve({ token: "a".repeat(32) }),
+    });
+
+    expect(malformed.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(await malformed.json()).toEqual(await missing.json());
+    expect(malformed.headers.get("cache-control")).toContain("no-store");
+    expect(malformed.headers.get("x-robots-tag")).toContain("noindex");
+    expect(malformed.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("exposes no mutation or administrator operation", async () => {
+    const route = await import("@/app/api/status/[token]/route");
+
+    expect("POST" in route).toBe(false);
+    expect("PATCH" in route).toBe(false);
+    expect("DELETE" in route).toBe(false);
   });
 });
 

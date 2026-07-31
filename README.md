@@ -10,6 +10,7 @@
 - Cloudflare Turnstile 服务端 Siteverify 验证、蜜罐、内容评分与数据库限流
 - 原始 IP 和 User-Agent 不落库，仅保存 `HMAC-SHA256` 指纹
 - 每分钟 1 条、每小时 5 条、每天 15 条的来源限流
+- 每次有效提交返回不可枚举的私密状态链接，无需账户即可稍后查看持久化回答
 - 单管理员服务端 Session：HttpOnly、Secure（生产环境）、SameSite=Strict
 - 后台搜索、状态筛选、分页、标记未读/已读/已回复/忽略/垃圾信息
 - 回答独立持久化；已回答问题可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
@@ -26,7 +27,7 @@
 - SQLite、better-sqlite3、Drizzle ORM
 - Tailwind CSS 4
 - Zod 4、Vitest、Playwright、ESLint、Prettier
-- Next.js ImageResponse 服务端 PNG 渲染
+- Satori + Sharp 服务端 PNG 渲染，并显式加载项目内 Unicode 字体
 - Cloudflare Turnstile、Telegram Bot API
 - pnpm、Docker Compose
 
@@ -43,7 +44,8 @@ Next.js 16 要求 Node.js 20.9 或更高版本。推荐本地与 VPS 使用 Node
 ├── src/
 │   ├── app/
 │   │   ├── admin/                 # 管理后台及登录页
-│   │   └── api/                   # 提交、认证、管理、健康检查 API
+│   │   ├── status/                # 持有私密链接即可访问的提问状态页
+│   │   └── api/                   # 提交、状态、认证、管理、健康检查 API
 │   ├── components/                # 前台表单、Turnstile、后台交互组件
 │   ├── db/                        # Drizzle schema、连接和 migration 执行器
 │   ├── lib/                       # 认证、环境、哈希、限流、审核、Telegram
@@ -76,6 +78,16 @@ DATABASE_URL=file:./data/askbox.db
 ```
 
 打开 `http://localhost:3000`，后台为 `http://localhost:3000/admin`。应用启动时也会幂等执行现有 migration，因此正常启动不会遗漏迁移。
+
+## 私密提问状态
+
+正常问题成功写入数据库后，提交接口会返回一次 `/status/<token>`，首页随即展示完整状态链接、复制按钮和查看入口。Token 由 `crypto.randomBytes(24)` 生成，具有 192 bit 随机性并使用固定长度 base64url 编码；它不包含问题 ID、IP 或其他业务数据。数据库只保存 Token 的 SHA-256 摘要，并通过唯一索引查询，不保存可直接访问页面的原始 Token。
+
+状态页由持有链接者访问，不是公开回答列表。未回答时只显示收到状态和提交时间；管理员保存回答后，普通刷新即可读取 `answers` 表中的问题、回答和回复时间。如果管理员已生成分享卡片，状态页会复用同一套服务端 Renderer 预览并下载 PNG，不从图片反推回答，也不会创建另一份回答数据。
+
+请把状态链接视为密码：链接不会进入 Telegram 管理通知，也无法通过问题 ID、来源指纹或后台外的搜索找回。蜜罐、封禁和静默丢弃请求收到的是无法命中数据库的普通外观链接，避免暴露过滤规则。升级前的旧问题保留原数据，但 `status_token_hash` 为 `NULL`，不会自动产生可访问链接。
+
+`/status/*` 与 `/api/status/*` 始终返回 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer` 和 `X-Robots-Tag: noindex, nofollow, noarchive`；页面元数据也声明 `noindex` / `nofollow`。格式错误、过长、不存在以及已删除记录的 Token 对外统一显示“链接无效或已失效”。状态读取和 PNG 渲染分别使用轻量的来源限流；当前限流状态位于单个应用进程内，重启会重置，适合本项目默认的单容器部署。
 
 ## 分享卡片
 
@@ -249,14 +261,14 @@ pnpm test
 
 审阅新生成的 SQL 后，将 schema 与 migration 一起提交。不要修改已经在生产应用过的 migration；应生成新的 migration。SQLite 开启 WAL、外键和 5 秒 busy timeout。
 
-`0001_puzzling_dreaming_celestial.sql` 只新增 `answers` 与 `cards`，不会重写 `questions`。旧问题会原样保留，直到管理员首次保存回答才创建 Answer。Question 删除时，关联 Answer 和 Card 元数据通过 SQLite 外键级联删除。
+`0001_puzzling_dreaming_celestial.sql` 只新增 `answers` 与 `cards`，不会重写 `questions`。`0002_private_status_links.sql` 为问题增加可空的 Token 摘要字段和唯一索引，同样不会改写旧问题。对应的人工回滚 SQL 位于 `drizzle/rollback/0002_private_status_links.sql`；回滚前必须停止应用并完成数据库备份。旧问题会原样保留，直到管理员首次保存回答才创建 Answer。Question 删除时，关联 Answer 和 Card 元数据通过 SQLite 外键级联删除。
 
 ## CI 质量门禁
 
 `.github/workflows/ci.yml` 在每次 push 和 Pull Request 上执行三个隔离 Job：
 
 1. frozen lockfile 安装、Prettier 检查、ESLint、TypeScript、Unit、Integration、API、覆盖率门禁和 production build；
-2. 单 worker Chromium E2E，覆盖匿名提交 → SQLite → 管理员登录 → 查看 → 回答 → PNG → 状态更新；
+2. 单 worker Chromium E2E，覆盖匿名提交 → 私密状态链接 → SQLite → 管理员登录 → 查看 → 回答 → PNG → 状态页刷新与下载；
 3. 使用独立 Compose 项目和命名卷构建生产镜像，验证自动 migration、只读根文件系统、健康检查、维护命令与重启恢复。
 
 Vitest 覆盖率门禁针对安全和服务核心模块，阈值为语句/行 80%、函数 80%、分支 70%。E2E 将 Telegram 与 Turnstile 切换为显式 mock，生产环境若设置 `EXTERNAL_SERVICES_MODE=mock` 会在启动阶段直接失败。工作流只做质量验证，不会自动连接或部署到生产 VPS。
@@ -302,6 +314,7 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 登录失败按来源进行 SQLite 计数，15 分钟最多 5 次。
 - 所有输入均通过 Zod 验证；数据库操作使用 Drizzle 参数化查询。
 - 回答与问题状态在同一事务中持久化；分享卡片只读取已保存回答，导出结果禁止共享缓存。
+- 私密状态链接使用 192 bit 随机 Token，数据库只存 SHA-256 摘要，状态页禁止索引、Referrer 和共享缓存。
 - 生产环境禁止外部服务 mock；Turnstile 和 Telegram 的自动化测试不会访问真实服务。
 - 问题正文只由 React 作为纯文本渲染，不使用 `dangerouslySetInnerHTML`。
 - Content-Security-Policy 仅放行本站与 Turnstile 必需来源，同时设置防嵌套、MIME、防权限滥用响应头。

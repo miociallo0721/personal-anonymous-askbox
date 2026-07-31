@@ -4,6 +4,7 @@ import {
   answerContentSchema,
   idSchema,
   questionContentSchema,
+  statusTokenSchema,
   submitQuestionSchema,
 } from "@/lib/validation";
 
@@ -34,5 +35,12 @@ describe("server-side validation", () => {
     expect(idSchema.parse("12")).toBe(12);
     expect(idSchema.safeParse("0").success).toBe(false);
     expect(idSchema.safeParse("1.2").success).toBe(false);
+  });
+
+  it("accepts only exact-length base64url status tokens", () => {
+    expect(statusTokenSchema.safeParse("a".repeat(32)).success).toBe(true);
+    expect(statusTokenSchema.safeParse("a".repeat(31)).success).toBe(false);
+    expect(statusTokenSchema.safeParse(`${"a".repeat(31)}!`).success).toBe(false);
+    expect(statusTokenSchema.safeParse("a".repeat(10_000)).success).toBe(false);
   });
 });

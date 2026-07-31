@@ -27,13 +27,11 @@ export type ExportedShareCard = RenderedShareCard & {
   card: typeof cards.$inferSelect;
 };
 
-export async function exportShareCard(
-  database: DatabaseClient,
+export async function renderShareCard(
   input: ExportShareCardInput,
   renderer: ShareCardRenderer = imageResponseCardRenderer,
-): Promise<ExportedShareCard> {
-  const format = SHARE_CARD_FORMATS[input.aspect];
-  const rendered = await renderer.render({
+): Promise<RenderedShareCard> {
+  return renderer.render({
     data: {
       question: input.question.content.trim(),
       answer: input.answer.content.trim(),
@@ -41,6 +39,15 @@ export async function exportShareCard(
     aspect: input.aspect,
     theme: input.theme,
   });
+}
+
+export async function exportShareCard(
+  database: DatabaseClient,
+  input: ExportShareCardInput,
+  renderer: ShareCardRenderer = imageResponseCardRenderer,
+): Promise<ExportedShareCard> {
+  const format = SHARE_CARD_FORMATS[input.aspect];
+  const rendered = await renderShareCard(input, renderer);
   const contentHash = createHash("sha256").update(rendered.bytes).digest("hex");
   const card = database
     .insert(cards)

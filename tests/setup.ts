@@ -1,6 +1,7 @@
 import { afterEach } from "vitest";
 
 import { resetEnvForTests } from "@/lib/env";
+import { resetStatusRateLimitsForTests } from "@/lib/status-rate-limit";
 
 Object.assign(process.env, {
   NODE_ENV: "test",
@@ -17,4 +18,5 @@ Object.assign(process.env, {
 
 afterEach(() => {
   resetEnvForTests();
+  resetStatusRateLimitsForTests();
 });

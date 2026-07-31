@@ -9,14 +9,40 @@ test("anonymous submission through persisted answer and share-card export", asyn
   await page.goto("/");
   await page.getByLabel("想问的问题").fill(questionText);
   await page.getByRole("button", { name: "匿名提交" }).click();
-  await expect(page.getByRole("status")).toContainText("已经收到");
+  await expect(page.getByRole("heading", { name: "问题已收到" })).toBeVisible();
+  const statusLink = page.getByRole("link", { name: "查看状态" });
+  const statusPath = await statusLink.getAttribute("href");
+  expect(statusPath).toMatch(/^\/status\/[A-Za-z0-9_-]{32}$/);
+  await expect(page.getByLabel("私密状态链接")).toHaveValue(
+    new RegExp(`/status/[A-Za-z0-9_-]{32}$`),
+  );
 
   const sqlite = new Database(path.resolve("data/e2e.db"), { readonly: true });
   const savedQuestion = sqlite
-    .prepare("SELECT id, status, telegram_notified FROM questions WHERE content = ?")
-    .get(questionText) as { id: number; status: string; telegram_notified: number } | undefined;
+    .prepare(
+      "SELECT id, status, status_token_hash, telegram_notified FROM questions WHERE content = ?",
+    )
+    .get(questionText) as
+    | {
+        id: number;
+        status: string;
+        status_token_hash: string;
+        telegram_notified: number;
+      }
+    | undefined;
   expect(savedQuestion).toMatchObject({ status: "unread", telegram_notified: 1 });
+  expect(savedQuestion?.status_token_hash).toHaveLength(64);
+  expect(statusPath).not.toBe(`/status/${savedQuestion?.id}`);
   sqlite.close();
+
+  const receivedResponse = await page.goto(statusPath!);
+  expect(receivedResponse?.headers()["cache-control"]).toContain("no-store");
+  expect(receivedResponse?.headers()["x-robots-tag"]).toContain("noindex");
+  expect(receivedResponse?.headers()["referrer-policy"]).toBe("no-referrer");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/i);
+  await expect(page.getByRole("heading", { name: "已收到", exact: true })).toBeVisible();
+  await expect(page.getByText("你的问题正在等待回复。")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "回答", exact: true })).toHaveCount(0);
 
   await page.goto("/admin/login");
   await page.getByLabel("管理员密码").fill("e2e-admin-password");
@@ -63,4 +89,20 @@ test("anonymous submission through persisted answer and share-card export", asyn
       aspect: "1:1",
       mimeType: "image/png",
     });
+
+  await page.goto(statusPath!);
+  await expect(page.getByRole("heading", { name: "已回复", exact: true })).toBeVisible();
+  await expect(page.getByText(questionText, { exact: true })).toBeVisible();
+  await expect(page.getByText(answerText, { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "1:1 分享卡片预览" })).toBeVisible();
+
+  const downloadPath = await page.getByRole("link", { name: "下载 PNG" }).getAttribute("href");
+  const downloadResponse = await page.request.get(downloadPath!);
+  expect(downloadResponse.status()).toBe(200);
+  expect(downloadResponse.headers()["content-type"]).toBe("image/png");
+  expect(downloadResponse.headers()["cache-control"]).toContain("no-store");
+  expect(downloadResponse.headers()["content-disposition"]).toContain("attachment");
+  expect(Array.from((await downloadResponse.body()).subarray(0, 8))).toEqual([
+    137, 80, 78, 71, 13, 10, 26, 10,
+  ]);
 });

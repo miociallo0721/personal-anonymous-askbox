@@ -9,6 +9,7 @@ export const questions = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     content: text("content").notNull(),
     status: text("status", { enum: questionStatuses }).notNull().default("unread"),
+    statusTokenHash: text("status_token_hash"),
     ipHash: text("ip_hash").notNull(),
     userAgentHash: text("user_agent_hash").notNull(),
     spamScore: integer("spam_score").notNull().default(0),
@@ -25,6 +26,7 @@ export const questions = sqliteTable(
     index("questions_status_idx").on(table.status),
     index("questions_ip_hash_idx").on(table.ipHash),
     index("questions_telegram_notified_idx").on(table.telegramNotified),
+    uniqueIndex("questions_status_token_hash_unique").on(table.statusTokenHash),
   ],
 );
 
