@@ -21,6 +21,13 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
   const [copyNotice, setCopyNotice] = useState("");
   const length = Array.from(content).length;
   const onToken = useCallback((value: string) => setToken(value), []);
+  const submitDisabled = submitting || length < 2 || length > 1000 || (turnstileEnabled && !token);
+  const submitHint =
+    length === 0
+      ? "写下问题后即可提交"
+      : turnstileEnabled && !token
+        ? "完成人机验证后即可提交"
+        : "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,9 +87,9 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
   }
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form onSubmit={submit} noValidate aria-busy={submitting}>
       <label htmlFor="question" className="type-section block">
-        想问的问题
+        写下你的问题
       </label>
       <textarea
         id="question"
@@ -91,12 +98,16 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         rows={7}
         maxLength={2000}
         disabled={submitting}
-        placeholder="写下你想问的事情……"
-        className="field mt-5 min-h-48 resize-y px-5 py-4 text-base leading-7 sm:min-h-56"
+        aria-describedby="question-guidance question-count"
+        placeholder="有什么想说的，就写在这里……"
+        className="field question-field mt-5 min-h-48 resize-y px-5 py-4 text-base leading-7 sm:min-h-56"
       />
       <div className="mt-3 flex items-center justify-between gap-4">
-        <span className="type-caption">请勿提交敏感个人信息</span>
+        <span id="question-guidance" className="type-caption">
+          请勿提交敏感个人信息
+        </span>
         <span
+          id="question-count"
           className={`type-caption tabular-nums ${length > 1000 ? "text-[var(--danger)]" : ""}`}
         >
           {length} / 1000
@@ -119,7 +130,7 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
       </div>
 
       {turnstileEnabled && siteKey ? (
-        <div className="mt-5">
+        <div className="mt-4">
           <TurnstileWidget key={widgetKey} siteKey={siteKey} onToken={onToken} />
         </div>
       ) : null}
@@ -132,6 +143,9 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
           <h2 id="submission-success-title" className="type-section">
             问题已收到
           </h2>
+          <p className="sr-only" role="status">
+            问题已收到，请保存私密状态链接。
+          </p>
           <p className="type-body mt-3">
             请保存此链接。你可以稍后通过它查看回复，我们无法在链接丢失后帮你找回。
           </p>
@@ -163,8 +177,13 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
         </section>
       ) : null}
 
-      <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-h-6 text-sm leading-6" role="status" aria-live="polite">
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          id="submit-feedback"
+          className="min-h-6 text-sm leading-6"
+          role="status"
+          aria-live="polite"
+        >
           {notice ? (
             <p
               className={
@@ -173,12 +192,17 @@ export function QuestionForm({ turnstileEnabled, siteKey }: Props) {
             >
               {notice.text}
             </p>
+          ) : submitHint ? (
+            <p className="submit-helper">{submitHint}</p>
           ) : null}
         </div>
         <button
           type="submit"
-          disabled={submitting || length < 2 || length > 1000 || (turnstileEnabled && !token)}
-          className="button-primary w-full sm:w-auto sm:min-w-32"
+          disabled={submitDisabled}
+          aria-disabled={submitDisabled}
+          aria-busy={submitting}
+          aria-describedby="submit-feedback"
+          className="button-primary question-submit w-full sm:w-auto"
         >
           {submitting ? <span className="loading-mark" aria-hidden="true" /> : null}
           {submitting ? "正在提交…" : "匿名提交"}

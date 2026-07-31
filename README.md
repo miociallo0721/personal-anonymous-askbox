@@ -360,4 +360,6 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 
 ## License
 
-个人项目可按需使用和修改。部署者负责遵守所在地隐私、内容与数据保留要求。
+项目源代码采用 [MIT License](LICENSE)，Copyright (c) 2026 Mio。
+
+`public/fonts/share-card` 中的第三方字体仍分别遵循该目录内对应的许可证。MIT License 不授予对项目名称、域名或品牌标识的商标使用权。部署者仍需自行遵守所在地的隐私、内容与数据保留要求。
