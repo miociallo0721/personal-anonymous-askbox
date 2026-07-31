@@ -29,7 +29,9 @@ test("anonymous submission through persisted answer and share-card export", asyn
   await expect(page).toHaveURL(new RegExp(`/admin/share/${savedQuestion?.id}$`));
 
   await page.getByLabel("回答").fill(answerText);
-  await page.getByLabel("1:1").check();
+  const aspectOptions = page.getByRole("group", { name: "画面比例" });
+  await aspectOptions.getByText("1:1", { exact: true }).click();
+  await expect(aspectOptions.getByLabel("1:1")).toBeChecked();
   await page.getByRole("button", { name: "生成 PNG" }).click();
   await expect(page.getByRole("status")).toContainText("PNG 已生成", { timeout: 30_000 });
   await expect(page.getByRole("img", { name: /分享卡片预览/ })).toBeVisible();
