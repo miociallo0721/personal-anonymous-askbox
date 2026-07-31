@@ -1,4 +1,5 @@
-import { ImageResponse } from "next/og";
+import satori from "satori";
+import sharp from "sharp";
 
 import { ShareCard } from "@/components/share-card";
 import {
@@ -7,6 +8,7 @@ import {
   type ShareCardData,
   type ShareCardThemeName,
 } from "@/lib/share-card";
+import { loadShareCardFonts } from "@/services/share-card-fonts";
 
 export type ShareCardRenderInput = {
   data: ShareCardData;
@@ -27,20 +29,26 @@ export interface ShareCardRenderer {
 }
 
 export const imageResponseCardRenderer: ShareCardRenderer = {
-  version: "image-response-v1",
+  version: "satori-sharp-v2-unicode-fonts",
   async render(input) {
     const format = SHARE_CARD_FORMATS[input.aspect];
-    const response = new ImageResponse(
+    const fonts = await loadShareCardFonts();
+    const svg = await satori(
       ShareCard({
         data: input.data,
         aspect: input.aspect,
         themeName: input.theme,
       }),
-      { width: format.width, height: format.height },
+      {
+        width: format.width,
+        height: format.height,
+        fonts,
+      },
     );
+    const png = await sharp(Buffer.from(svg)).resize(format.width, format.height).png().toBuffer();
 
     return {
-      bytes: new Uint8Array(await response.arrayBuffer()),
+      bytes: Uint8Array.from(png),
       mimeType: "image/png",
       pageNumber: 1,
       pageCount: 1,
