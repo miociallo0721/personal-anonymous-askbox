@@ -3,6 +3,7 @@ import type { CSSProperties, ReactElement } from "react";
 import {
   getShareCardTypography,
   SHARE_CARD_FORMATS,
+  SHARE_CARD_FONT_FAMILY,
   SHARE_CARD_THEMES,
   type ShareCardAspect,
   type ShareCardData,
@@ -14,9 +15,6 @@ type Props = {
   aspect: ShareCardAspect;
   themeName?: ShareCardThemeName;
 };
-
-const sansFont =
-  '"Noto Sans SC", "Noto Sans JP", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
 
 function TextBlock({ children, style }: { children: string; style: CSSProperties }): ReactElement {
   return (
@@ -52,7 +50,7 @@ export function ShareCard({ data, aspect, themeName = "paper" }: Props): ReactEl
         padding: `${format.paddingY}px ${format.paddingX}px`,
         backgroundColor: theme.background,
         color: theme.foreground,
-        fontFamily: sansFont,
+        fontFamily: SHARE_CARD_FONT_FAMILY,
       }}
     >
       <div

@@ -9,6 +9,9 @@ export type ShareCardData = {
   answer: string;
 };
 
+export const SHARE_CARD_FONT_FAMILY =
+  '"Inter", "Noto Sans CJK SC", "Noto Sans Symbols", "Noto Sans Symbols 2", "Noto Sans Math", "DejaVu Sans"';
+
 export type ShareCardTheme = {
   background: string;
   surface: string;
