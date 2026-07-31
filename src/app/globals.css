@@ -399,9 +399,24 @@ a:focus-visible {
 
 .turnstile-region {
   display: flex;
-  min-height: 140px;
+  width: 100%;
+  min-height: 65px;
   align-items: center;
   justify-content: flex-start;
+}
+
+.turnstile-region[data-turnstile-size="compact"] {
+  min-height: 140px;
+  justify-content: center;
+}
+
+.turnstile-region[data-turnstile-size="flexible"] {
+  min-height: 65px;
+}
+
+.turnstile-region[data-turnstile-size="flexible"] > div {
+  flex: 1 1 auto;
+  max-width: 100%;
 }
 
 .question-submit {
@@ -429,6 +444,13 @@ a:focus-visible {
   .type-hero {
     max-width: 8.25em;
     font-size: clamp(2.2rem, 11.5vw, 2.375rem);
+  }
+}
+
+@media (max-width: 374px) {
+  .turnstile-region:not([data-turnstile-size="flexible"]) {
+    min-height: 140px;
+    justify-content: center;
   }
 }
 

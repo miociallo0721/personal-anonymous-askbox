@@ -24,7 +24,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="askbox-surface surface p-5 sm:p-8">
+          <div className="askbox-surface surface p-4 sm:p-5 lg:p-8">
             <QuestionForm turnstileEnabled={turnstileEnabled} siteKey={siteKey} />
           </div>
         </section>
