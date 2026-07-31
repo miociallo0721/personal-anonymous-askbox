@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ShareCardGenerator } from "@/components/share-card-generator";
 import { db } from "@/db/client";
-import { questions } from "@/db/schema";
+import { answers, questions } from "@/db/schema";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 
@@ -18,16 +18,21 @@ export default async function ShareCardPage({ params }: Props) {
   const id = idSchema.safeParse((await params).id);
   if (!id.success) notFound();
 
-  const question = db
+  const result = db
     .select({
-      id: questions.id,
-      content: questions.content,
-      status: questions.status,
+      question: {
+        id: questions.id,
+        content: questions.content,
+      },
+      answer: {
+        content: answers.content,
+      },
     })
     .from(questions)
+    .leftJoin(answers, eq(answers.questionId, questions.id))
     .where(eq(questions.id, id.data))
     .get();
-  if (!question || question.status !== "replied") notFound();
+  if (!result) notFound();
 
   return (
     <main className="mx-auto min-h-dvh max-w-6xl px-5 py-5 sm:px-8 sm:py-7 lg:px-10">
@@ -36,12 +41,18 @@ export default async function ShareCardPage({ params }: Props) {
           <p className="eyebrow">ASKBOX ADMIN</p>
           <h1 className="type-heading mt-4">分享卡片</h1>
         </div>
-        <a href={`/admin?question=${question.id}`} className="button-secondary no-underline">
+        <a href={`/admin?question=${result.question.id}`} className="button-secondary no-underline">
           返回问题管理
         </a>
       </header>
 
-      <ShareCardGenerator question={{ id: question.id, content: question.content }} />
+      <ShareCardGenerator
+        question={{
+          id: result.question.id,
+          content: result.question.content,
+          answer: result.answer?.content ?? "",
+        }}
+      />
     </main>
   );
 }

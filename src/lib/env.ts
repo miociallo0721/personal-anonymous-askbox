@@ -20,6 +20,7 @@ const envSchema = z.object({
   TURNSTILE_ENABLED: booleanString(true),
   TRUST_CLOUDFLARE_PROXY: booleanString(false),
   TRUST_PROXY: booleanString(false),
+  EXTERNAL_SERVICES_MODE: z.enum(["live", "mock"]).default("live"),
   TZ: z.string().default("Asia/Shanghai"),
 });
 
@@ -40,6 +41,9 @@ export function getEnv(): AppEnv {
 
 export function validateRuntimeEnv() {
   const env = getEnv();
+  if (env.NODE_ENV === "production" && env.EXTERNAL_SERVICES_MODE !== "live") {
+    throw new Error("生产环境禁止使用外部服务 mock");
+  }
   if (env.NODE_ENV === "production" && env.ADMIN_PASSWORD.length < 12) {
     throw new Error("生产环境 ADMIN_PASSWORD 至少需要 12 个字符");
   }

@@ -12,7 +12,8 @@
 - 每分钟 1 条、每小时 5 条、每天 15 条的来源限流
 - 单管理员服务端 Session：HttpOnly、Secure（生产环境）、SameSite=Strict
 - 后台搜索、状态筛选、分页、标记未读/已读/已回复/忽略/垃圾信息
-- 已回复问题可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
+- 回答独立持久化；已回答问题可生成 1:1、4:5、9:16 的高分辨率 PNG 分享卡片
+- 分享卡片保存尺寸、主题、内容哈希与渲染器版本，不把 PNG 二进制写入 SQLite
 - 单条删除、批量删除垃圾信息、封禁/解除来源
 - Telegram 发送结果、`message_id` 和最近错误记录，支持后台手动重发
 - SQLite WAL、Drizzle schema/migration、必要索引和启动自动迁移
@@ -24,7 +25,7 @@
 - TypeScript 严格模式
 - SQLite、better-sqlite3、Drizzle ORM
 - Tailwind CSS 4
-- Zod 4、Vitest、ESLint、Prettier
+- Zod 4、Vitest、Playwright、ESLint、Prettier
 - Next.js ImageResponse 服务端 PNG 渲染
 - Cloudflare Turnstile、Telegram Bot API
 - pnpm、Docker Compose
@@ -35,8 +36,10 @@ Next.js 16 要求 Node.js 20.9 或更高版本。推荐本地与 VPS 使用 Node
 
 ```text
 .
+├── .github/workflows/             # push / PR 质量门禁
 ├── drizzle/                       # 版本化 SQL migration 与元数据
 ├── public/
+├── scripts/                       # 数据维护和 E2E 初始化命令
 ├── src/
 │   ├── app/
 │   │   ├── admin/                 # 管理后台及登录页
@@ -44,8 +47,12 @@ Next.js 16 要求 Node.js 20.9 或更高版本。推荐本地与 VPS 使用 Node
 │   ├── components/                # 前台表单、Turnstile、后台交互组件
 │   ├── db/                        # Drizzle schema、连接和 migration 执行器
 │   ├── lib/                       # 认证、环境、哈希、限流、审核、Telegram
-│   └── services/                  # 问题提交流程
-├── tests/                         # 基础单元与集成测试
+│   └── services/                  # 提交、回答、Session、卡片服务层
+├── tests/
+│   ├── unit/                      # 纯逻辑单元测试
+│   ├── integration/               # SQLite、Session、服务集成测试
+│   ├── api/                       # Route Handler 安全与行为测试
+│   └── e2e/                       # Playwright 完整管理员工作流
 ├── Dockerfile
 ├── docker-compose.yml
 ├── drizzle.config.ts
@@ -72,12 +79,12 @@ DATABASE_URL=file:./data/askbox.db
 
 ## 分享卡片
 
-1. 在管理后台将问题标记为“已回复”。
-2. 点击该问题操作区中的“分享卡片”。
-3. 输入要展示的回答，选择 1:1、4:5 或 9:16。
-4. 生成并下载 PNG。
+1. 在管理后台点击问题操作区中的“回答与分享”。
+2. 输入回答，选择 1:1、4:5 或 9:16。
+3. 点击生成；回答先写入 SQLite，问题状态在同一事务中更新为“已回复”。
+4. 服务端根据数据库中的 Question + Answer 排版，生成并下载 PNG。
 
-卡片由服务端直接排版和渲染，不依赖浏览器截图。三种尺寸分别为 1200×1200、1200×1500 和 1080×1920。回答仅用于当前生成请求，不会写入 SQLite；生成接口仍要求有效的管理员 Session 和同源请求。
+卡片由独立 Renderer 在服务端直接排版和渲染，不依赖浏览器截图。三种尺寸分别为 1200×1200、1200×1500 和 1080×1920。每次导出会在 `cards` 表保存 Answer 关联、画面尺寸、主题、MIME、字节数、SHA-256 内容哈希、渲染器版本和分页元数据；PNG 本身不入库。生成接口仍要求有效的管理员 Session 和同源请求。
 
 常用质量命令：
 
@@ -85,6 +92,8 @@ DATABASE_URL=file:./data/askbox.db
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:coverage
+pnpm test:e2e
 pnpm build
 pnpm format:check
 ```
@@ -105,6 +114,7 @@ pnpm format:check
 | `TURNSTILE_ENABLED`              | 是         | 默认 `true`；开发环境可明确设为 `false`                                       |
 | `TRUST_CLOUDFLARE_PROXY`         | 否         | 只在源站仅接受 Cloudflare/可信代理请求时设为 `true`                           |
 | `TRUST_PROXY`                    | 否         | 只在可信 Nginx/1Panel 会覆盖转发头时设为 `true`                               |
+| `EXTERNAL_SERVICES_MODE`         | 是         | 正常保持 `live`；`mock` 仅用于本地自动化测试，生产启动会拒绝                  |
 | `TZ`                             | 建议       | 使用 `Asia/Shanghai`；数据库保存 UTC 时间点，界面和 Telegram 按上海时区格式化 |
 
 生成密钥示例：
@@ -149,7 +159,7 @@ docker compose ps
 docker compose logs --tail=100 askbox
 ```
 
-服务默认仅绑定 `127.0.0.1:3001`，应通过 Nginx、1Panel 或 Cloudflare 前置访问。可通过 `ASKBOX_HOST_PORT` 修改宿主机端口。容器以 UID 1001 非 root 用户运行，根文件系统只读，`./data` 挂载到 `/data`。更新镜像不会删除数据库：
+服务默认仅绑定 `127.0.0.1:3001`，应通过 Nginx、1Panel 或 Cloudflare 前置访问。可通过 `ASKBOX_HOST_PORT` 修改宿主机端口。容器以 UID 1001 非 root 用户运行，带最小 init 进程，根文件系统只读，`./data` 挂载到 `/data`。Next.js 缓存与 `/tmp` 使用受限 tmpfs；Compose 为停止过程保留 20 秒优雅退出时间。更新镜像不会删除数据库：
 
 ```bash
 docker compose build --pull
@@ -163,6 +173,35 @@ docker compose up -d
 ```bash
 sudo chown -R 1001:1001 data
 ```
+
+### 定期数据维护
+
+`pnpm maintenance` 是可重复执行、适合 cron 的短任务，默认：
+
+- 删除已经过期的 `admin_sessions`；
+- 删除 30 天前的 `admin_login_attempts`；
+- 完成后执行被动 WAL checkpoint。
+
+它不会在访客提交或管理员登录的请求链路中运行，也不会自动删除问题、回答、卡片元数据或封禁记录。先预览待清理数量：
+
+```bash
+pnpm maintenance -- --dry-run
+docker compose run --rm --no-deps maintenance node scripts/maintenance.mjs --dry-run
+```
+
+Docker 正式执行：
+
+```bash
+docker compose run --rm --no-deps maintenance
+```
+
+Ubuntu cron 每天 03:15 执行示例（将目录替换为实际路径）：
+
+```cron
+15 3 * * * cd /opt/personal-anonymous-askbox && /usr/bin/docker compose run --rm --no-deps maintenance >> /var/log/askbox-maintenance.log 2>&1
+```
+
+可用 `--login-attempt-days=60` 修改登录记录保留天数，最小为 1 天。
 
 ## Nginx / 1Panel 反向代理
 
@@ -210,6 +249,18 @@ pnpm test
 
 审阅新生成的 SQL 后，将 schema 与 migration 一起提交。不要修改已经在生产应用过的 migration；应生成新的 migration。SQLite 开启 WAL、外键和 5 秒 busy timeout。
 
+`0001_puzzling_dreaming_celestial.sql` 只新增 `answers` 与 `cards`，不会重写 `questions`。旧问题会原样保留，直到管理员首次保存回答才创建 Answer。Question 删除时，关联 Answer 和 Card 元数据通过 SQLite 外键级联删除。
+
+## CI 质量门禁
+
+`.github/workflows/ci.yml` 在每次 push 和 Pull Request 上执行三个隔离 Job：
+
+1. frozen lockfile 安装、Prettier 检查、ESLint、TypeScript、Unit、Integration、API、覆盖率门禁和 production build；
+2. 单 worker Chromium E2E，覆盖匿名提交 → SQLite → 管理员登录 → 查看 → 回答 → PNG → 状态更新；
+3. 使用独立 Compose 项目和命名卷构建生产镜像，验证自动 migration、只读根文件系统、健康检查、维护命令与重启恢复。
+
+Vitest 覆盖率门禁针对安全和服务核心模块，阈值为语句/行 80%、函数 80%、分支 70%。E2E 将 Telegram 与 Turnstile 切换为显式 mock，生产环境若设置 `EXTERNAL_SERVICES_MODE=mock` 会在启动阶段直接失败。工作流只做质量验证，不会自动连接或部署到生产 VPS。
+
 ## 备份与恢复
 
 最简单可靠的停机备份：
@@ -250,7 +301,8 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 密码先转换为固定长度 SHA-256 摘要再进行时序安全比较。
 - 登录失败按来源进行 SQLite 计数，15 分钟最多 5 次。
 - 所有输入均通过 Zod 验证；数据库操作使用 Drizzle 参数化查询。
-- 分享卡片只读取已回复问题；临时回答不写入数据库，生成结果禁止共享缓存。
+- 回答与问题状态在同一事务中持久化；分享卡片只读取已保存回答，导出结果禁止共享缓存。
+- 生产环境禁止外部服务 mock；Turnstile 和 Telegram 的自动化测试不会访问真实服务。
 - 问题正文只由 React 作为纯文本渲染，不使用 `dangerouslySetInnerHTML`。
 - Content-Security-Policy 仅放行本站与 Turnstile 必需来源，同时设置防嵌套、MIME、防权限滥用响应头。
 - 日志只记录简短错误，不记录原始 IP、管理员密码、Bot Token 或 Turnstile Secret。
@@ -289,6 +341,8 @@ Session 哈希同时绑定管理员密码，修改密码后旧 Session 会自动
 - 搜索使用 SQLite `LIKE`，适合个人规模，不提供全文分词。
 - Telegram 仅通知和重试，不实现 webhook 或 Telegram 内回复。
 - Share Card 当前提供单一纸张主题；主题结构已独立，后续可扩展而无需修改渲染接口。
+- 长文本分页的数据字段和 Renderer 接口已经预留，但当前 UI 仍限制回答为 600 字且一次导出单页。
+- `cards` 保存导出元数据而非 PNG；下载链接是当次响应生成的浏览器内存 URL，不提供历史图片文件仓库。
 - 项目无法代替上游防火墙/WAF；Cloudflare 与真实 IP 的可信边界必须由部署者配置。
 
 ## License

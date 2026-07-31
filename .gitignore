@@ -1,9 +1,13 @@
 node_modules/
+.pnpm-store/
 .next/
+.next-e2e/
 .env
 .env.local
 data/
 coverage/
+playwright-report/
+test-results/
 *.log
 .DS_Store
 *.tsbuildinfo
